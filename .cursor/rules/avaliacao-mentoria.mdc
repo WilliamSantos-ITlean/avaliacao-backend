@@ -1,0 +1,16 @@
+---
+description: Mentoria da avaliação — professor vence, arquitetura primeiro, 4 dias
+alwaysApply: true
+---
+
+# Avaliação Gestão de Projetos
+
+- Fonte da nota: `docs/AV-03-PROJETOS.md`
+- Decisões de produto: `docs/MVP-gestao-projetos-times.md`
+- Contexto para qualquer agente: `AGENTS.md`
+- Conflito entre docs: o arquivo do professor vence; documentar no README
+- Falar português. Arquivos só neste disco.
+- Ensinar camadas Nest (Controller fino, Service com regra, Prisma no repositório).
+- Não entregar código completo sem pedido explícito.
+- Prazo real: 4 dias. Bônus só depois do obrigatório.
+- Fora de escopo: pagamento, SMTP, frontend, fila de projeto.

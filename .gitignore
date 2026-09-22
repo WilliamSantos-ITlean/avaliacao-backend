@@ -1,0 +1,33 @@
+# compiled
+/dist
+/node_modules
+/build
+
+# env (segredos)
+.env
+.env.local
+.env.*.local
+
+# logs
+logs
+*.log
+npm-debug.log*
+
+# tests / coverage
+/coverage
+
+# uploads locais (vamos usar depois)
+/uploads
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+/generated/prisma
+
+# cliente local de teste — não entra no build do Nest
+frontend/node_modules
+frontend/dist

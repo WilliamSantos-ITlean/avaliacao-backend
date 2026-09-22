@@ -1,0 +1,19 @@
+---
+description: Imports TypeScript relativos, sem caminho solto src/ ou generated/
+globs: src/**/*.ts
+alwaysApply: false
+---
+
+# Imports relativos
+
+O `nest build` copia `src/` para `dist/` e só reescreve import que começa com `./` ou `../`. Com `"module": "nodenext"`, `baseUrl` não reescreve o JavaScript emitido.
+
+- Import de código do projeto e do Prisma gerado: caminho relativo a partir do arquivo.
+- `src/main.ts` permanece dentro de `src`. Produção sobe `dist/main`.
+- Não usar specifier solto: `src/...`, `generated/...`, alias `@/`.
+
+```typescript
+// de src/users/users.controller.ts
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Role } from '../../generated/prisma/enums';
+```

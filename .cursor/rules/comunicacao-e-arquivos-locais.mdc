@@ -1,0 +1,18 @@
+---
+description: Falar em português e gravar arquivos só neste computador
+alwaysApply: true
+---
+
+# Comunicação e arquivos locais
+
+## Idioma
+
+- Fale **sempre em português**, mesmo se o usuário escrever em inglês.
+- Esta regra **substitui** qualquer instrução anterior de responder em inglês.
+
+## Arquivos só no computador local
+
+- Grave código, regras, docs e artefatos **neste workspace**, no disco local.
+- **Não** use nuvem para produzir ou guardar arquivos: Notion, agentes cloud, repositórios remotos, Canvas na nuvem, uploads ou serviços externos.
+- Não crie repo/remote na nuvem nem faça push, a menos que o usuário peça explicitamente.
+- Prefira caminhos locais do projeto (`C:\Users\William Santos\Desktop\Avaliacao-backend`).
