@@ -20,6 +20,13 @@ export class UsersRepository {
     });
   }
 
+  findByEmail(email: string) {
+    return this.prisma.user.findUnique({
+      where: { email },
+      select: publicUserSelect
+    })
+  }
+
   updateRole(id: string, role: Role) {
     return this.prisma.user.update({
       where: { id },

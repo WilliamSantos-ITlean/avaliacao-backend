@@ -23,7 +23,7 @@ export class ProjectMembersService {
     private readonly usersRepository: UsersRepository,
     private readonly membersRepository: ProjectMembersRepository,
     private readonly activitiesRepository: ActivitiesRepository,
-  ) {}
+  ) { }
 
   async list(projectId: string, user: AuthenticatedUser) {
     await this.access.authorize(projectId, user);
@@ -34,7 +34,8 @@ export class ProjectMembersService {
     const { actor } = await this.access.authorize(projectId, user);
     this.assertCanManageMembers(actor);
 
-    const target = await this.usersRepository.findById(dto.userId);
+    const email = dto.email.trim().toLowerCase()
+    const target = await this.usersRepository.findByEmail(email);
 
     if (!target) {
       throw new NotFoundException('Usuário não encontrado');

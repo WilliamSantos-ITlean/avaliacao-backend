@@ -229,8 +229,8 @@ export function LabPage() {
             <div>
               <h2>Upload válido e inválido</h2>
               <p>
-                No quadro, o anexo usa o campo <code>file</code>. Mande um PDF ou PNG e, de propósito, um .exe. Presença,
-                tamanho e tipo são regra do backend.
+                No quadro, o anexo usa o campo <code>file</code>. Mande um JPEG ou PNG de até 2 MB e, de propósito, um PDF ou .exe. Presença,
+                tamanho e tipo voltam 400. Projeto arquivado volta 409, no anexo e no comentário novo.
               </p>
             </div>
           </header>

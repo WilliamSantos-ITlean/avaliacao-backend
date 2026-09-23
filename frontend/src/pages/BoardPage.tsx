@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api } from '../lib/api';
+import { api, apiBlob } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import {
   dateInputToIso,
@@ -489,7 +489,7 @@ function TaskDrawer({
 
   async function upload(file: File | null) {
     if (!file) return;
-    setError(null);
+    setSideError(null);
     const form = new FormData();
     form.append('file', file);
     try {
@@ -497,7 +497,7 @@ function TaskDrawer({
       toast('Anexo enviado.');
       await loadSides();
     } catch (cause) {
-      setError(cause);
+      setSideError(cause);
     }
   }
 
@@ -595,6 +595,7 @@ function TaskDrawer({
           <ul className="file-list">
             {files.map((file) => (
               <li key={file.id} className="file-row">
+                <AttachmentImage taskId={task.id} fileId={file.id} filename={file.filename} />
                 <strong>{file.filename}</strong>
                 <span>
                   {file.mimeType} {formatBytes(file.size)}
@@ -605,6 +606,7 @@ function TaskDrawer({
           <label className="drop">
             <input
               type="file"
+              accept="image/jpeg,image/png,.jpg,.jpeg,.png"
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
                 void upload(file);
@@ -612,13 +614,52 @@ function TaskDrawer({
               }}
             />
             <span>Escolher arquivo</span>
-            <small>Campo `file`. Tipo inválido ou arquivo grande deve voltar 400.</small>
+            <small>JPEG ou PNG, até 2 MB. Tipo ou tamanho inválido volta 400. Projeto arquivado volta 409.</small>
           </label>
           <ErrorNote error={sideError} />
         </section>
       </aside>
     </div>
   );
+}
+
+function AttachmentImage({
+  taskId,
+  fileId,
+  filename,
+}: {
+  taskId: string;
+  fileId: string;
+  filename: string;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+    setSrc(null);
+    setFailed(false);
+
+    apiBlob(`/tasks/${taskId}/attachments/${fileId}`)
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [taskId, fileId]);
+
+  if (failed) return <span className="muted">Não foi possível mostrar a imagem.</span>;
+  if (!src) return <span className="muted">Carregando imagem…</span>;
+  return <img className="file-preview" src={src} alt={filename} />;
 }
 
 function MembersPanel({
@@ -639,12 +680,11 @@ function MembersPanel({
 
   async function add(event: FormEvent) {
     event.preventDefault();
-    const value = who.trim();
+    const email = who.trim().toLowerCase();
     setPending(true);
     setFormError(null);
-    const body = value.includes('@') ? { email: value.toLowerCase() } : { userId: value };
     try {
-      await api(`/projects/${projectId}/members`, { method: 'POST', body });
+      await api(`/projects/${projectId}/members`, { method: 'POST', body: { email } });
       setWho('');
       toast('Membro adicionado.');
       await onChanged();
@@ -671,15 +711,16 @@ function MembersPanel({
       <ErrorNote error={error} />
       <form className="edit-bar" onSubmit={add}>
         <label className="field grow">
-          <span>E-mail ou id do usuário</span>
+          <span>E-mail</span>
           <input
             className="input"
+            type="email"
             value={who}
             onChange={(event) => setWho(event.target.value)}
             placeholder="ana@email.com"
             required
           />
-          <small>Com @ enviamos email. Sem @ enviamos userId. Repetir a pessoa deve voltar 409.</small>
+          <small>A pessoa precisa já ter conta. E-mail inválido volta 400. Quem não existe volta 404. Repetir a pessoa volta 409.</small>
         </label>
         <button className="btn btn-primary" type="submit" disabled={pending}>
           Adicionar

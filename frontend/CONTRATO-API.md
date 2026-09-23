@@ -68,7 +68,7 @@ Se a role mora dentro do JWT, a pessoa precisa entrar de novo depois da promoç�
 
 `POST /projects/:id/members`
 
-Com `@` no campo, o Norte manda `{ "email": "ana@email.com" }`. Sem `@`, manda `{ "userId": "..." }`.
+O Norte manda `{ "email": "ana@email.com" }`. E-mail inválido → `400`. Conta inexistente → `404`.
 
 Repetir o mesmo par projeto+usuário → `409`.
 
@@ -116,7 +116,13 @@ Transições:
 { "body": "texto" }
 ```
 
-`POST /tasks/:id/attachments` — `multipart/form-data`, campo **`file`**. Sem arquivo, tipo proibido ou tamanho acima do limite → `400`.
+Projeto `ARCHIVED` não aceita comentário novo → `409`. Listar continua permitido.
+
+`POST /tasks/:id/attachments` — `multipart/form-data`, campo **`file`**. Só JPEG e PNG, no máximo 2 MB. Sem arquivo, tipo proibido ou tamanho acima do limite → `400`. Projeto `ARCHIVED` → `409`.
+
+`GET /tasks/:id/attachments` — lista os anexos da tarefa (membro ou admin).
+
+`GET /tasks/:id/attachments/:attachmentId` — devolve os bytes da imagem (`Content-Type` JPEG ou PNG). A mesma autorização da lista. O `<img>` do browser não envia o JWT; o cliente baixa com os headers e monta a prévia.
 
 `GET /projects/:id/activities` — cada item com `action`, `actorId` (ou `actor.email`) e, se houver, `metadata`.
 

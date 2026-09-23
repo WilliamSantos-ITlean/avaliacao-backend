@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsString, MaxLength, MinLength } from 'class-validator';
 
@@ -6,6 +7,12 @@ function trimString(value: unknown): unknown {
 }
 
 export class CreateCommentDto {
+  @ApiProperty({
+    example: 'O banner chegou.',
+    minLength: 1,
+    maxLength: 2000,
+    description: 'Texto do comentário. De 1 a 2000 caracteres. O autor é quem está no token.',
+  })
   @Transform(({ value }) => trimString(value))
   @IsString()
   @MinLength(1)

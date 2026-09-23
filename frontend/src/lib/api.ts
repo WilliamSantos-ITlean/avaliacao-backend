@@ -17,6 +17,7 @@ export type RequestOptions = {
   form?: FormData;
   auth?: boolean | string;
   query?: Record<string, string | number | undefined>;
+  binary?: boolean;
 };
 
 type Reporter = (entry: TrafficEntry) => void;
@@ -159,6 +160,21 @@ export async function request(path: string, options: RequestOptions = {}) {
     throw error;
   }
 
+  if (options.binary && response.ok) {
+    const blob = await response.blob();
+    reporter({
+      id: crypto.randomUUID(),
+      at: new Date().toISOString(),
+      method,
+      path: url,
+      status: response.status,
+      ms: Math.round(performance.now() - started),
+      request: redact(options.form ?? options.body ?? null),
+      response: `[imagem ${blob.type || 'sem tipo'} ${blob.size} bytes]`,
+    });
+    return { status: response.status, body: blob };
+  }
+
   const body = await readBody(response);
   reporter({
     id: crypto.randomUUID(),
@@ -184,4 +200,12 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     throw new ApiError(result.status, messageFrom(result.body, result.status), result.body);
   }
   return result.body as T;
+}
+
+export async function apiBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
+  const result = await request(path, { ...options, binary: true });
+  if (result.status < 200 || result.status >= 300 || !(result.body instanceof Blob)) {
+    throw new ApiError(result.status, messageFrom(result.body, result.status), result.body);
+  }
+  return result.body;
 }

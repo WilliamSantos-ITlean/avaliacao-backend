@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { ProjectStatus } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { UnitOfWork } from '../prisma/unit-of-work';
 import { ActivityAction } from '../projects/activity-actions';
@@ -20,7 +25,16 @@ export class CommentsService {
 
   async create(taskId: string, dto: CreateCommentDto, user: AuthenticatedUser) {
     const task = await this.requireTask(taskId);
-    const { actor } = await this.access.authorize(task.projectId, user);
+    const { actor, project } = await this.access.authorize(
+      task.projectId,
+      user,
+    );
+
+    if (project.status === ProjectStatus.ARCHIVED) {
+      throw new ConflictException(
+        'Projeto arquivado não aceita novos comentários',
+      );
+    }
 
     return this.unitOfWork.run(async (tx) => {
       const comment = await this.commentsRepository.create(
