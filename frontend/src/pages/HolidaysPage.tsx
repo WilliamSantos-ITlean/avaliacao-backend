@@ -1,9 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
-import { formatDate } from '../lib/format';
 import { parseHolidays } from '../lib/parse';
 import type { Holiday } from '../lib/types';
-import { Empty, ErrorNote } from '../ui';
+import { ErrorNote } from '../ui';
 
 export function HolidaysPage() {
   const [year, setYear] = useState(String(new Date().getFullYear()));
@@ -42,52 +41,93 @@ export function HolidaysPage() {
         </p>
       </header>
 
-      <form className="edit-bar" onSubmit={load}>
+      <form className="holiday-query" onSubmit={load}>
         <label className="field">
           <span>Ano</span>
           <input className="input" value={year} onChange={(event) => setYear(event.target.value)} inputMode="numeric" />
-          <small>Um ano inválido, ou a API externa fora, deve falhar de forma controlada — status e mensagem, não 500 cru.</small>
         </label>
         <button className="btn btn-primary" type="submit" disabled={pending}>
           {pending ? 'Consultando…' : 'Consultar'}
         </button>
+        <small>Um ano inválido, ou a API externa fora, deve falhar de forma controlada — status e mensagem, não 500 cru.</small>
       </form>
 
       <ErrorNote error={error} />
 
-      {loaded && holidays.length === 0 ? (
-        <Empty title="Lista vazia" text="A rota respondeu, mas nenhum feriado foi reconhecido. Confira o JSON no tráfego." />
+      {loaded ? (
+        <div className="holiday-grid">
+          {MONTHS.map((month, index) => {
+            const items = groups[index];
+            return (
+              <section key={month} className="holiday-card">
+                <h2>{month}</h2>
+                {items.length === 0 ? (
+                  <p className="holiday-empty">Nenhum feriado neste mês.</p>
+                ) : (
+                  <ul>
+                    {items.map((holiday) => (
+                      <li key={`${holiday.date}-${holiday.name}`}>
+                        <time dateTime={holiday.date}>{formatCalendarDate(holiday.date)}</time>
+                        <span>{holiday.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
+        </div>
       ) : null}
-
-      <div className="holiday-grid">
-        {groups.map(([month, items]) => (
-          <section key={month} className="holiday-card">
-            <h2>{month}</h2>
-            <ul>
-              {items.map((holiday) => (
-                <li key={`${holiday.date}-${holiday.name}`}>
-                  <time>{formatDate(holiday.date)}</time>
-                  <span>{holiday.name}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
     </section>
   );
 }
 
+const MONTHS = [
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
+];
+
+function calendarParts(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return { year, month, day };
+}
+
+function formatCalendarDate(value: string) {
+  const parts = calendarParts(value);
+  if (!parts) return value;
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
+}
+
 function groupByMonth(holidays: Holiday[]) {
-  const map = new Map<string, Holiday[]>();
+  const months = MONTHS.map(() => [] as Holiday[]);
   for (const holiday of holidays) {
-    const date = new Date(holiday.date);
-    const label = Number.isNaN(date.getTime())
-      ? 'Sem mês'
-      : new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(date);
-    const bucket = map.get(label) ?? [];
-    bucket.push(holiday);
-    map.set(label, bucket);
+    const parts = calendarParts(holiday.date);
+    if (!parts) continue;
+    months[parts.month - 1].push(holiday);
   }
-  return [...map.entries()];
+  for (const items of months) {
+    items.sort((left, right) => left.date.localeCompare(right.date));
+  }
+  return months;
 }

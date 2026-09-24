@@ -38,9 +38,23 @@ export class CommentsRepository {
     });
   }
 
+  findById(id: string) {
+    return this.prisma.comment.findUnique({
+      where: { id },
+      select: commentSelect,
+    });
+  }
+
   create(data: CommentWriteData, tx: Prisma.TransactionClient) {
     return tx.comment.create({
       data,
+      select: commentSelect,
+    });
+  }
+
+  delete(id: string, tx: Prisma.TransactionClient) {
+    return tx.comment.delete({
+      where: { id },
       select: commentSelect,
     });
   }

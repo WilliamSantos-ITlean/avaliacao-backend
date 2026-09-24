@@ -1,10 +1,11 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ProjectStatus } from '../../generated/prisma/enums';
+import { Role } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { UnitOfWork } from '../prisma/unit-of-work';
 import { ActivityAction } from '../projects/activity-actions';
@@ -48,9 +49,8 @@ export class AttachmentsService {
       user,
     );
 
-    if (project.status === ProjectStatus.ARCHIVED) {
-      throw new ConflictException('Projeto arquivado não aceita novas imagens');
-    }
+    this.rejectDeletedTask(task, actor);
+    this.access.assertOpenForChanges(project);
 
     const storedPath = await this.storage.save(task.id, file);
 
@@ -90,15 +90,56 @@ export class AttachmentsService {
     }
   }
 
+  async remove(taskId: string, attachmentId: string, user: AuthenticatedUser) {
+    const task = await this.requireTask(taskId);
+    const { actor, project } = await this.access.authorize(task.projectId, user);
+    this.rejectDeletedTask(task, actor);
+    this.access.assertOpenForChanges(project);
+    const attachment = await this.attachmentsRepository.findById(attachmentId);
+
+    if (!attachment || attachment.taskId !== task.id) {
+      throw new NotFoundException('Anexo não encontrado');
+    }
+
+    if (attachment.uploadedById !== actor.id && actor.role !== Role.ADMIN) {
+      throw new ForbiddenException('Só quem enviou ou o ADMIN apaga esta imagem');
+    }
+
+    const removed = await this.unitOfWork.run(async (tx) => {
+      const deleted = await this.attachmentsRepository.delete(attachment.id, tx);
+
+      await this.activitiesRepository.record(
+        {
+          actorId: actor.id,
+          action: ActivityAction.ATTACHMENT_DELETED,
+          projectId: task.projectId,
+          taskId: task.id,
+          metadata: {
+            attachmentId: attachment.id,
+            filename: attachment.filename,
+          },
+        },
+        tx,
+      );
+
+      return deleted;
+    });
+
+    await this.storage.remove(attachment.path);
+    return removed;
+  }
+
   async list(taskId: string, user: AuthenticatedUser) {
     const task = await this.requireTask(taskId);
-    await this.access.authorize(task.projectId, user);
+    const { actor } = await this.access.authorize(task.projectId, user);
+    this.hideDeletedTask(task, actor);
     return this.attachmentsRepository.listByTask(task.id);
   }
 
   async open(taskId: string, attachmentId: string, user: AuthenticatedUser) {
     const task = await this.requireTask(taskId);
-    await this.access.authorize(task.projectId, user);
+    const { actor } = await this.access.authorize(task.projectId, user);
+    this.hideDeletedTask(task, actor);
 
     const attachment = await this.attachmentsRepository.findById(attachmentId);
 
@@ -143,6 +184,20 @@ export class AttachmentsService {
     const cleaned = base.replace(/[^\w.\- ()]/g, '_').slice(0, 180);
 
     return cleaned || fallback;
+  }
+
+  private hideDeletedTask(task: TaskView, actor: AuthenticatedUser): void {
+    if (task.deletedAt && actor.role !== Role.ADMIN) {
+      throw new NotFoundException('Tarefa não encontrada');
+    }
+  }
+
+  private rejectDeletedTask(task: TaskView, actor: AuthenticatedUser): void {
+    this.hideDeletedTask(task, actor);
+
+    if (task.deletedAt) {
+      throw new ConflictException('Tarefa apagada não aceita alterações');
+    }
   }
 
   private async requireTask(id: string): Promise<TaskView> {

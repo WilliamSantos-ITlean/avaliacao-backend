@@ -47,6 +47,7 @@ model Project {
   description String?
   status      ProjectStatus @default(ACTIVE)
   ownerId     String
+  deletedAt   DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -76,6 +77,7 @@ model Task {
   status      TaskStatus @default(TODO)
   assigneeId  String?
   dueDate     DateTime?
+  deletedAt   DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 

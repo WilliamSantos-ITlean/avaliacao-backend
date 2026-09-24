@@ -19,8 +19,8 @@ export class CreateTaskDto {
     description: 'Título. Mínimo de 3 caracteres. A tarefa nasce TODO.',
   })
   @Transform(({ value }) => trimString(value))
-  @IsString()
-  @MinLength(3)
+  @IsString({ message: 'O título deve ser um texto.' })
+  @MinLength(3, { message: 'O título deve ter no mínimo 3 caracteres.' })
   title!: string;
 
   @ApiPropertyOptional({
@@ -29,7 +29,7 @@ export class CreateTaskDto {
   })
   @IsOptional()
   @Transform(({ value }) => trimString(value))
-  @IsString()
+  @IsString({ message: 'A descrição deve ser um texto.' })
   description?: string;
 
   @ApiPropertyOptional({
@@ -37,14 +37,14 @@ export class CreateTaskDto {
     description: 'Id de um membro do projeto. Quem não é membro volta 409.',
   })
   @IsOptional()
-  @IsUUID()
+  @IsUUID(undefined, { message: 'O responsável deve ser um UUID válido.' })
   assigneeId?: string;
 
   @ApiPropertyOptional({
     example: '2026-11-20T00:00:00.000Z',
-    description: 'Prazo em ISO 8601. Se o dia for feriado nacional, a API volta 409.',
+    description: 'Prazo em ISO 8601. O dia civil é o de Brasília. Se for feriado nacional, a API volta 409.',
   })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({}, { message: 'O prazo deve ser uma data no formato ISO 8601.' })
   dueDate?: string;
 }

@@ -7,8 +7,10 @@ export class UpdateTaskStatusDto {
     enum: TaskStatus,
     example: TaskStatus.IN_PROGRESS,
     description:
-      'Próximo estado. TODO → IN_PROGRESS ou CANCELLED. IN_PROGRESS → TODO, WAITING_MANAGER_APPROVE ou CANCELLED. WAITING_MANAGER_APPROVE → DONE, IN_PROGRESS ou CANCELLED, e só se quem chama é PROJECT_MANAGER ou ADMIN. Qualquer outro salto volta 409.',
+      'Próximo estado. TODO → IN_PROGRESS ou CANCELLED. IN_PROGRESS → TODO, WAITING_MANAGER_APPROVE ou CANCELLED. WAITING_MANAGER_APPROVE → DONE, IN_PROGRESS ou CANCELLED só para PROJECT_MANAGER ou ADMIN; MEMBER recebe 403. Qualquer outro salto volta 409.',
   })
-  @IsEnum(TaskStatus)
+  @IsEnum(TaskStatus, {
+    message: 'O status deve ser TODO, IN_PROGRESS, WAITING_MANAGER_APPROVE, DONE ou CANCELLED.',
+  })
   status!: TaskStatus;
 }

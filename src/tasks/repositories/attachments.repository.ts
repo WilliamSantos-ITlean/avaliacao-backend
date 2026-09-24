@@ -41,6 +41,7 @@ export class AttachmentsRepository {
       select: {
         id: true,
         taskId: true,
+        uploadedById: true,
         filename: true,
         mimeType: true,
         path: true,
@@ -59,6 +60,13 @@ export class AttachmentsRepository {
   create(data: AttachmentWriteData, tx: Prisma.TransactionClient) {
     return tx.attachment.create({
       data,
+      select: attachmentSelect,
+    });
+  }
+
+  delete(id: string, tx: Prisma.TransactionClient) {
+    return tx.attachment.delete({
+      where: { id },
       select: attachmentSelect,
     });
   }

@@ -14,7 +14,7 @@ export class RegisterDto {
         example: 'ana@email.com',
         description: 'E-mail da nova conta. Gravado em minúsculas.',
     })
-    @IsEmail()
+    @IsEmail({}, { message: 'Informe um e-mail válido.' })
     email!: string;
 
     @ApiProperty({
@@ -22,8 +22,8 @@ export class RegisterDto {
         minLength: 8,
         description: 'Mínimo de 8 caracteres. Só entra no banco como hash.',
     })
-    @IsString()
-    @MinLength(8)
+    @IsString({ message: 'A senha deve ser um texto.' })
+    @MinLength(8, { message: 'A senha deve ter no mínimo 8 caracteres.' })
     password!: string;
 }
 

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Controller,
+  Delete,
   FileTypeValidator,
   Get,
   MaxFileSizeValidator,
@@ -21,6 +22,7 @@ import {
   ApiConflictResponse,
   ApiConsumes,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -156,5 +158,26 @@ export class AttachmentsController {
     );
 
     return new StreamableFile(file.buffer);
+  }
+
+  @Delete(':attachmentId')
+  @ApiUuidParam('id', 'Id da tarefa.')
+  @ApiUuidParam('attachmentId', 'Id do anexo.')
+  @ApiOperation({
+    summary: 'Apagar imagem',
+    description:
+      'Só quem enviou ou o ADMIN. Outro membro, inclusive PROJECT_MANAGER, recebe 403. Anexo de outra tarefa ou inexistente volta 404. Projeto ARCHIVED volta 409. O arquivo sai do disco depois que o banco confirma.',
+  })
+  @ApiOkResponse({ description: 'Anexo apagado, sem o binário.' })
+  @ApiNotAMember()
+  @ApiForbiddenResponse({ description: 'Quem não enviou a imagem nem é ADMIN.' })
+  @ApiNotFoundResponse({ description: 'Tarefa ou anexo não encontrado.' })
+  @ApiConflictResponse({ description: 'Projeto arquivado não aceita apagar imagem.' })
+  remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('attachmentId', ParseUUIDPipe) attachmentId: string,
+  ) {
+    return this.attachmentsService.remove(id, attachmentId, user);
   }
 }

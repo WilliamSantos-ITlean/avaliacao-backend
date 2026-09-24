@@ -1,11 +1,12 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Project } from '../../generated/prisma/client';
-import { Role } from '../../generated/prisma/enums';
+import { ProjectStatus, Role } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { UsersRepository } from '../users/users.repository';
 import { ProjectMembersRepository } from './repositories/project-members.repository';
@@ -42,7 +43,7 @@ export class ProjectAccessService {
     const actor = await this.loadActor(user);
     const project = await this.projectsRepository.findById(projectId);
 
-    if (!project) {
+    if (!project || (project.deletedAt && actor.role !== Role.ADMIN)) {
       throw new NotFoundException('Projeto não encontrado');
     }
 
@@ -60,5 +61,15 @@ export class ProjectAccessService {
     }
 
     return { project, actor };
+  }
+
+  assertOpenForChanges(project: Project): void {
+    if (project.deletedAt) {
+      throw new ConflictException('Projeto apagado não aceita alterações');
+    }
+
+    if (project.status === ProjectStatus.ARCHIVED) {
+      throw new ConflictException('Projeto arquivado não aceita alterações');
+    }
   }
 }

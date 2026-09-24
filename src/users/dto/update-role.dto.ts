@@ -9,6 +9,8 @@ export class UpdateRoleDto {
     description:
       'Novo papel. Na demo, o ADMIN promove MEMBER para PROJECT_MANAGER. Esse passo é o que libera criar projeto.',
   })
-  @IsEnum(Role)
+  @IsEnum(Role, {
+    message: 'O papel deve ser MEMBER, PROJECT_MANAGER ou ADMIN.',
+  })
   role!: Role;
 }

@@ -151,7 +151,8 @@ TODO ⇄ IN_PROGRESS → WAITING_MANAGER_APPROVE → DONE
 | WAITING_MANAGER_APPROVE | DONE (aprovar) | PM, ADMIN |
 | TODO / IN_PROGRESS | CANCELLED | MEMBER, PM, ADMIN |
 | WAITING_MANAGER_APPROVE | CANCELLED | PM, ADMIN |
-| * | DONE direto (ex.: MEMBER → DONE) | **proibido** → `409` |
+| WAITING_MANAGER_APPROVE | DONE, IN_PROGRESS ou CANCELLED sem ser PM/ADMIN | **403** (falta papel; a transição em si é válida) |
+| * | DONE direto, ou qualquer salto fora da tabela | **proibido** → `409` |
 
 ---
 

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -9,6 +10,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -52,13 +54,13 @@ export class TasksController {
   @ApiOperation({
     summary: 'Editar tarefa',
     description:
-      'Membro do projeto ou ADMIN. Body vazio volta 400. Não muda o estado: isso é PATCH /tasks/:id/status. Projeto arquivado, responsável fora do time ou feriado voltam 409.',
+      'Membro do projeto ou ADMIN. Body vazio volta 400. Não muda o estado: isso é PATCH /tasks/:id/status. Projeto ARCHIVED ou apagado volta 409, inclusive para título, descrição, responsável e prazo. Responsável fora do time ou feriado (dia civil de Brasília) também voltam 409. Tarefa apagada some para quem não é ADMIN.',
   })
   @ApiOkResponse({ description: 'Tarefa atualizada.' })
   @ApiNotAMember()
   @ApiNotFoundResponse({ description: 'Tarefa não encontrada.' })
   @ApiConflictResponse({
-    description: 'Projeto arquivado, responsável fora do projeto ou prazo em feriado.',
+    description: 'Projeto arquivado ou apagado, responsável fora do projeto ou prazo em feriado nacional.',
   })
   update(
     @CurrentUser() user: AuthenticatedUser,
@@ -73,11 +75,14 @@ export class TasksController {
   @ApiOperation({
     summary: 'Mudar o estado',
     description:
-      'TODO → IN_PROGRESS ou CANCELLED. IN_PROGRESS → TODO, WAITING_MANAGER_APPROVE ou CANCELLED. De WAITING_MANAGER_APPROVE, só PROJECT_MANAGER ou ADMIN: DONE (aprovar), IN_PROGRESS (devolver) ou CANCELLED. Ir direto para DONE, ou MEMBER aprovar, volta 409. Projeto ARCHIVED também volta 409.',
+      'TODO → IN_PROGRESS ou CANCELLED. IN_PROGRESS → TODO, WAITING_MANAGER_APPROVE ou CANCELLED. De WAITING_MANAGER_APPROVE, só PROJECT_MANAGER ou ADMIN: DONE (aprovar), IN_PROGRESS (devolver) ou CANCELLED. MEMBER nesses três destinos recebe 403. Qualquer outro salto, inclusive ir direto para DONE, volta 409. Projeto ARCHIVED também volta 409. Repetir o status atual responde 200 e não grava Activity.',
   })
   @ApiOkResponse({ description: 'Tarefa no estado novo.' })
   @ApiNotAMember()
   @ApiNotFoundResponse({ description: 'Tarefa não encontrada.' })
+  @ApiForbiddenResponse({
+    description: 'MEMBER tenta aprovar, devolver ou cancelar uma tarefa em espera.',
+  })
   @ApiConflictResponse({ description: 'Transição não permitida, ou projeto arquivado.' })
   changeStatus(
     @CurrentUser() user: AuthenticatedUser,
@@ -85,5 +90,23 @@ export class TasksController {
     @Body() dto: UpdateTaskStatusDto,
   ) {
     return this.tasksService.changeStatus(id, dto, user);
+  }
+
+  @Delete(':id')
+  @ApiUuidParam('id', 'Id da tarefa.')
+  @ApiOperation({
+    summary: 'Apagar tarefa',
+    description:
+      'Apagamento lógico. Membro do projeto ou ADMIN. A tarefa some da lista. ADMIN ainda abre GET /tasks/:id e, no projeto apagado, vê as tarefas na listagem. Pode apagar mesmo com o projeto ARCHIVED. Projeto apagado volta 409. A segunda vez, para o ADMIN, volta 409.',
+  })
+  @ApiOkResponse({ description: 'Tarefa com deletedAt preenchido.' })
+  @ApiNotAMember()
+  @ApiNotFoundResponse({ description: 'Tarefa não encontrada.' })
+  @ApiConflictResponse({ description: 'Tarefa já apagada, ou projeto apagado.' })
+  remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.tasksService.remove(id, user);
   }
 }

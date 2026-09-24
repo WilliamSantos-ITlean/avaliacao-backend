@@ -7,6 +7,6 @@ export class AddProjectMemberDto {
     description:
       'E-mail de quem já tem conta. O service normaliza e resolve o userId. UUID não entra neste body.',
   })
-  @IsEmail()
+  @IsEmail({}, { message: 'Informe um e-mail válido.' })
   email!: string;
 }

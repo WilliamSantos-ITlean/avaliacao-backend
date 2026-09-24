@@ -25,13 +25,21 @@ export class ProjectsRepository {
 
   findAll() {
     return this.prisma.project.findMany({
+      where: { deletedAt: null },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  findDeleted() {
+    return this.prisma.project.findMany({
+      where: { deletedAt: { not: null } },
+      orderBy: { deletedAt: 'desc' },
     });
   }
 
   findByMember(userId: string) {
     return this.prisma.project.findMany({
-      where: { members: { some: { userId } } },
+      where: { deletedAt: null, members: { some: { userId } } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -42,5 +50,12 @@ export class ProjectsRepository {
 
   update(id: string, data: ProjectPatchData, tx: Prisma.TransactionClient) {
     return tx.project.update({ where: { id }, data });
+  }
+
+  softDelete(id: string, tx: Prisma.TransactionClient) {
+    return tx.project.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

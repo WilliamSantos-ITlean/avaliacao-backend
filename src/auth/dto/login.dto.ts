@@ -14,7 +14,7 @@ export class LoginDto {
         example: 'ana@email.com',
         description: 'E-mail da conta. O service tira espaços e põe em minúsculas antes de buscar.',
     })
-    @IsEmail()
+    @IsEmail({}, { message: 'Informe um e-mail válido.' })
     email!: string;
 
     @ApiProperty({
@@ -22,8 +22,8 @@ export class LoginDto {
         minLength: 8,
         description: 'Mínimo de 8 caracteres.',
     })
-    @IsString()
-    @MinLength(8)
+    @IsString({ message: 'A senha deve ser um texto.' })
+    @MinLength(8, { message: 'A senha deve ter no mínimo 8 caracteres.' })
     password!: string;
 }
 

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -9,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
@@ -60,11 +62,26 @@ export class ProjectsController {
     return this.projectsService.list(user);
   }
 
+  @Get('deleted')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiOperation({
+    summary: 'Listar projetos apagados',
+    description:
+      'Só o ADMIN. O apagamento é lógico: a linha fica no banco com deletedAt. MEMBER e PROJECT_MANAGER recebem 403 e não veem esses projetos nas outras rotas.',
+  })
+  @ApiOkResponse({ description: 'Projetos com deletedAt preenchido.' })
+  @ApiForbiddenResponse({ description: 'Quem não é ADMIN.' })
+  listDeleted(@CurrentUser() user: AuthenticatedUser) {
+    return this.projectsService.listDeleted(user);
+  }
+
   @Get(':id')
   @ApiUuidParam('id', 'Id do projeto.')
   @ApiOperation({
     summary: 'Ver um projeto',
-    description: 'Quem não é membro recebe 403. Projeto inexistente recebe 404. ADMIN entra em qualquer um.',
+    description:
+      'Quem não é membro recebe 403. Projeto inexistente ou apagado recebe 404, exceto o ADMIN, que ainda abre o projeto apagado.',
   })
   @ApiOkResponse({ description: 'Projeto.' })
   @ApiNotAMember()
@@ -83,7 +100,7 @@ export class ProjectsController {
   @ApiOperation({
     summary: 'Atualizar projeto',
     description:
-      'PROJECT_MANAGER membro ou ADMIN. Body vazio volta 400. Arquivar (ARCHIVED) passa a rejeitar tarefa, comentário e anexo.',
+      'PROJECT_MANAGER membro ou ADMIN. Body vazio volta 400. Com o projeto ARCHIVED, a única alteração aceita é voltar para ACTIVE. Nome, descrição e qualquer outra ação voltam 409. Projeto apagado também volta 409.',
   })
   @ApiOkResponse({ description: 'Projeto atualizado.' })
   @ApiForbiddenResponse({ description: 'MEMBER, ou gestor que não participa deste projeto.' })
@@ -94,5 +111,25 @@ export class ProjectsController {
     @Body() dto: UpdateProjectDto,
   ) {
     return this.projectsService.update(id, dto, user);
+  }
+
+  @Delete(':id')
+  @ApiUuidParam('id', 'Id do projeto.')
+  @ApiOperation({
+    summary: 'Apagar projeto',
+    description:
+      'Apagamento lógico. Só o dono do projeto ou o ADMIN. Gestor membro que não é o dono recebe 403. O projeto some das listas. Só o ADMIN ainda o vê, em GET /projects/deleted ou GET /projects/:id. Pode apagar mesmo ARCHIVED. A segunda vez, para o ADMIN, volta 409.',
+  })
+  @ApiOkResponse({ description: 'Projeto com deletedAt preenchido.' })
+  @ApiForbiddenResponse({
+    description: 'Quem não é o dono nem ADMIN, ou quem não participa deste projeto.',
+  })
+  @ApiNotFoundResponse({ description: 'Projeto não encontrado.' })
+  @ApiConflictResponse({ description: 'Projeto já foi apagado.' })
+  remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.projectsService.remove(id, user);
   }
 }

@@ -15,8 +15,8 @@ export class UpdateProjectDto {
   })
   @ValidateIf((_, value) => value !== undefined)
   @Transform(({ value }) => trimString(value))
-  @IsString()
-  @MinLength(3)
+  @IsString({ message: 'O nome deve ser um texto.' })
+  @MinLength(3, { message: 'O nome deve ter no mínimo 3 caracteres.' })
   name?: string;
 
   @ApiPropertyOptional({
@@ -26,16 +26,16 @@ export class UpdateProjectDto {
   })
   @IsOptional()
   @Transform(({ value }) => trimString(value))
-  @IsString()
+  @IsString({ message: 'A descrição deve ser um texto.' })
   description?: string | null;
 
   @ApiPropertyOptional({
     enum: ProjectStatus,
     example: ProjectStatus.ARCHIVED,
     description:
-      'ACTIVE ou ARCHIVED. Arquivar bloqueia criar e mover tarefa, comentar e anexar.',
+      'ACTIVE ou ARCHIVED. Arquivado bloqueia qualquer alteração, menos voltar para ACTIVE.',
   })
   @IsOptional()
-  @IsEnum(ProjectStatus)
+  @IsEnum(ProjectStatus, { message: 'O status deve ser ACTIVE ou ARCHIVED.' })
   status?: ProjectStatus;
 }

@@ -1,11 +1,12 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
-import { ProjectStatus, Role, TaskStatus } from '../../generated/prisma/enums';
+import { Role, TaskStatus } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { UnitOfWork } from '../prisma/unit-of-work';
 import { ActivityAction } from '../projects/activity-actions';
@@ -37,7 +38,7 @@ export class TasksService {
     const { project, actor } = await this.access.authorize(projectId, user);
     const dueDate = this.toDate(dto.dueDate);
 
-    this.assertProjectAcceptsTasks(project.status);
+    this.access.assertOpenForChanges(project);
     await this.assertAssigneeIsMember(project.id, dto.assigneeId);
     await this.assertDueDate(dueDate);
 
@@ -73,19 +74,23 @@ export class TasksService {
   }
 
   async list(projectId: string, user: AuthenticatedUser) {
-    await this.access.authorize(projectId, user);
-    return this.tasksRepository.listByProject(projectId);
+    const { project, actor } = await this.access.authorize(projectId, user);
+    const includeDeleted = actor.role === Role.ADMIN && project.deletedAt !== null;
+    return this.tasksRepository.listByProject(projectId, includeDeleted);
   }
 
   async findOne(id: string, user: AuthenticatedUser) {
     const task = await this.requireTask(id);
-    await this.access.authorize(task.projectId, user);
+    const { actor } = await this.access.authorize(task.projectId, user);
+    this.hideDeletedTask(task, actor);
     return task;
   }
 
   async update(id: string, dto: UpdateTaskDto, user: AuthenticatedUser) {
     const task = await this.requireTask(id);
-    const { actor } = await this.access.authorize(task.projectId, user);
+    const { project, actor } = await this.access.authorize(task.projectId, user);
+    this.rejectDeletedTask(task, actor);
+    this.access.assertOpenForChanges(project);
 
     if (
       dto.title === undefined &&
@@ -139,12 +144,12 @@ export class TasksService {
       user,
     );
 
+    this.rejectDeletedTask(task, actor);
+    this.access.assertOpenForChanges(project);
+
     if (dto.status === task.status) {
       return task;
     }
-
-
-    this.assertProjectAcceptsTasks(project.status);
 
     const next = this.resolveNextStatus(task, dto.status, actor);
 
@@ -168,6 +173,51 @@ export class TasksService {
 
       return updated;
     });
+  }
+
+  async remove(id: string, user: AuthenticatedUser) {
+    const task = await this.requireTask(id);
+    const { project, actor } = await this.access.authorize(task.projectId, user);
+
+    if (task.deletedAt) {
+      this.hideDeletedTask(task, actor);
+      throw new ConflictException('Tarefa já foi apagada');
+    }
+
+    if (project.deletedAt) {
+      throw new ConflictException('Projeto apagado não aceita alterações');
+    }
+
+    return this.unitOfWork.run(async (tx) => {
+      const removed = await this.tasksRepository.softDelete(task.id, tx);
+
+      await this.activitiesRepository.record(
+        {
+          actorId: actor.id,
+          action: ActivityAction.TASK_DELETED,
+          projectId: task.projectId,
+          taskId: task.id,
+          metadata: { title: task.title },
+        },
+        tx,
+      );
+
+      return removed;
+    });
+  }
+
+  private hideDeletedTask(task: TaskView, actor: AuthenticatedUser): void {
+    if (task.deletedAt && actor.role !== Role.ADMIN) {
+      throw new NotFoundException('Tarefa não encontrada');
+    }
+  }
+
+  private rejectDeletedTask(task: TaskView, actor: AuthenticatedUser): void {
+    this.hideDeletedTask(task, actor);
+
+    if (task.deletedAt) {
+      throw new ConflictException('Tarefa apagada não aceita alterações');
+    }
   }
 
   private async requireTask(id: string): Promise<TaskView> {
@@ -239,12 +289,6 @@ export class TasksService {
     };
   }
 
-  private assertProjectAcceptsTasks(status: ProjectStatus): void {
-    if (status === ProjectStatus.ARCHIVED) {
-      throw new ConflictException('Projeto arquivado não aceita criar nem mover tarefa!')
-    }
-  }
-
   private async assertAssigneeIsMember(
     projectId: string,
     assigneeId: string | null | undefined,
@@ -267,10 +311,7 @@ export class TasksService {
       return;
     }
 
-    const year = dueDate.getUTCFullYear();
-    const month = String(dueDate.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(dueDate.getUTCDate()).padStart(2, '0');
-    const dueDay = `${year}-${month}-${day}`;
+    const { year, day: dueDay } = this.civilDayInBrasilia(dueDate);
 
     const holidays = await this.holidays.listByYear(year);
     const found = holidays.find((holiday) => holiday.date === dueDay);
@@ -306,17 +347,34 @@ export class TasksService {
         break;
       case TaskStatus.WAITING_MANAGER_APPROVE:
         if (
-          (actor.role === Role.ADMIN ||
-            actor.role === Role.PROJECT_MANAGER) &&
-          (requested === TaskStatus.IN_PROGRESS ||
-            requested === TaskStatus.DONE ||
-            requested === TaskStatus.CANCELLED
-          )
-        ){
-          return requested
+          requested === TaskStatus.IN_PROGRESS ||
+          requested === TaskStatus.DONE ||
+          requested === TaskStatus.CANCELLED
+        ) {
+          if (
+            actor.role !== Role.ADMIN &&
+            actor.role !== Role.PROJECT_MANAGER
+          ) {
+            throw new ForbiddenException(
+              'Só o gestor aprova, devolve ou cancela uma tarefa em espera',
+            );
+          }
+
+          return requested;
         }
-      break;
+        break;
     }
     throw new ConflictException('Transição de status não permitida');
+  }
+
+  private civilDayInBrasilia(dueDate: Date): { year: number; day: string } {
+    const day = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(dueDate);
+
+    return { year: Number(day.slice(0, 4)), day };
   }
 }

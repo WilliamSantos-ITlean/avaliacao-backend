@@ -21,8 +21,8 @@ export class UpdateTaskDto {
   })
   @ValidateIf((_, value) => value !== undefined)
   @Transform(({ value }) => trimString(value))
-  @IsString()
-  @MinLength(3)
+  @IsString({ message: 'O título deve ser um texto.' })
+  @MinLength(3, { message: 'O título deve ter no mínimo 3 caracteres.' })
   title?: string;
 
   @ApiPropertyOptional({
@@ -32,7 +32,7 @@ export class UpdateTaskDto {
   })
   @IsOptional()
   @Transform(({ value }) => trimString(value))
-  @IsString()
+  @IsString({ message: 'A descrição deve ser um texto.' })
   description?: string | null;
 
   @ApiPropertyOptional({
@@ -42,16 +42,16 @@ export class UpdateTaskDto {
   })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
-  @IsUUID()
+  @IsUUID(undefined, { message: 'O responsável deve ser um UUID válido.' })
   assigneeId?: string | null;
 
   @ApiPropertyOptional({
     example: '2026-11-20T00:00:00.000Z',
     nullable: true,
-    description: 'Novo prazo em ISO 8601. Feriado volta 409. null tira o prazo.',
+    description: 'Novo prazo em ISO 8601. O dia civil é o de Brasília. Feriado volta 409. null tira o prazo.',
   })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
-  @IsDateString()
+  @IsDateString({}, { message: 'O prazo deve ser uma data no formato ISO 8601.' })
   dueDate?: string | null;
 }

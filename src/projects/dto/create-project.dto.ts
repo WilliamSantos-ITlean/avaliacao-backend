@@ -13,8 +13,8 @@ export class CreateProjectDto {
     description: 'Nome do projeto. Mínimo de 3 caracteres, já sem espaços nas pontas.',
   })
   @Transform(({ value }) => trimString(value))
-  @IsString()
-  @MinLength(3)
+  @IsString({ message: 'O nome deve ser um texto.' })
+  @MinLength(3, { message: 'O nome deve ter no mínimo 3 caracteres.' })
   name!: string;
 
   @ApiPropertyOptional({
@@ -23,6 +23,6 @@ export class CreateProjectDto {
   })
   @IsOptional()
   @Transform(({ value }) => trimString(value))
-  @IsString()
+  @IsString({ message: 'A descrição deve ser um texto.' })
   description?: string;
 }

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -10,6 +11,7 @@ import {
 import {
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -63,5 +65,26 @@ export class CommentsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.commentsService.list(id, user);
+  }
+
+  @Delete(':commentId')
+  @ApiUuidParam('id', 'Id da tarefa.')
+  @ApiUuidParam('commentId', 'Id do comentário.')
+  @ApiOperation({
+    summary: 'Apagar comentário',
+    description:
+      'Só o autor ou o ADMIN. Outro membro, inclusive PROJECT_MANAGER, recebe 403. Comentário de outra tarefa ou inexistente volta 404. Projeto ARCHIVED volta 409.',
+  })
+  @ApiOkResponse({ description: 'Comentário apagado.' })
+  @ApiNotAMember()
+  @ApiForbiddenResponse({ description: 'Quem não é o autor nem ADMIN.' })
+  @ApiNotFoundResponse({ description: 'Tarefa ou comentário não encontrado.' })
+  @ApiConflictResponse({ description: 'Projeto arquivado não aceita apagar comentário.' })
+  remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('commentId', ParseUUIDPipe) commentId: string,
+  ) {
+    return this.commentsService.remove(id, commentId, user);
   }
 }

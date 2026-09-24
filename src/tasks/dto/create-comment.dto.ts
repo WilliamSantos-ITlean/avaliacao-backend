@@ -14,8 +14,8 @@ export class CreateCommentDto {
     description: 'Texto do comentário. De 1 a 2000 caracteres. O autor é quem está no token.',
   })
   @Transform(({ value }) => trimString(value))
-  @IsString()
-  @MinLength(1)
-  @MaxLength(2000)
+  @IsString({ message: 'O comentário deve ser um texto.' })
+  @MinLength(1, { message: 'O comentário não pode ficar vazio.' })
+  @MaxLength(2000, { message: 'O comentário deve ter no máximo 2000 caracteres.' })
   body!: string;
 }

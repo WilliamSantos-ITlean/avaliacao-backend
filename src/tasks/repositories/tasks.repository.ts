@@ -11,6 +11,7 @@ const taskSelect = {
   status: true,
   assigneeId: true,
   dueDate: true,
+  deletedAt: true,
   createdAt: true,
   updatedAt: true,
   assignee: {
@@ -50,9 +51,12 @@ export class TasksRepository {
     });
   }
 
-  listByProject(projectId: string) {
+  listByProject(projectId: string, includeDeleted = false) {
     return this.prisma.task.findMany({
-      where: { projectId },
+      where: {
+        projectId,
+        ...(includeDeleted ? {} : { deletedAt: null }),
+      },
       orderBy: { createdAt: 'desc' },
       select: taskSelect,
     });
@@ -69,6 +73,14 @@ export class TasksRepository {
     return tx.task.update({
       where: { id },
       data,
+      select: taskSelect,
+    });
+  }
+
+  softDelete(id: string, tx: Prisma.TransactionClient) {
+    return tx.task.update({
+      where: { id },
+      data: { deletedAt: new Date() },
       select: taskSelect,
     });
   }

@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import type { Project } from '../../generated/prisma/client';
 import { ProjectStatus, Role } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
@@ -71,8 +76,50 @@ export class ProjectsService {
     return project;
   }
 
+  async listDeleted(user: AuthenticatedUser) {
+    const actor = await this.access.loadActor(user);
+
+    if (actor.role !== Role.ADMIN) {
+      throw new ForbiddenException('Só o ADMIN vê projetos apagados');
+    }
+
+    return this.projectsRepository.findDeleted();
+  }
+
+  async remove(id: string, user: AuthenticatedUser) {
+    const { project, actor } = await this.access.authorize(id, user);
+
+    if (project.deletedAt) {
+      throw new ConflictException('Projeto já foi apagado');
+    }
+
+    if (actor.role !== Role.ADMIN && project.ownerId !== actor.id) {
+      throw new ForbiddenException('Só o dono ou o ADMIN apaga o projeto');
+    }
+
+    return this.unitOfWork.run(async (tx) => {
+      const removed = await this.projectsRepository.softDelete(project.id, tx);
+
+      await this.activitiesRepository.record(
+        {
+          actorId: actor.id,
+          action: ActivityAction.PROJECT_DELETED,
+          projectId: project.id,
+          metadata: { name: project.name },
+        },
+        tx,
+      );
+
+      return removed;
+    });
+  }
+
   async update(id: string, dto: UpdateProjectDto, user: AuthenticatedUser) {
     const { project, actor } = await this.access.authorize(id, user);
+
+    if (project.deletedAt) {
+      throw new ConflictException('Projeto apagado não aceita alterações');
+    }
 
     if (
       dto.name === undefined &&
@@ -86,6 +133,16 @@ export class ProjectsService {
 
     if (Object.keys(changes).length === 0) {
       return project;
+    }
+
+    if (project.status === ProjectStatus.ARCHIVED) {
+      const unarchiveOnly =
+        changes.status === ProjectStatus.ACTIVE &&
+        Object.keys(changes).length === 1;
+
+      if (!unarchiveOnly) {
+        throw new ConflictException('Projeto arquivado não aceita alterações');
+      }
     }
 
     return this.unitOfWork.run(async (tx) => {

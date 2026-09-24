@@ -31,7 +31,8 @@ export class ProjectMembersService {
   }
 
   async add(projectId: string, dto: AddProjectMemberDto, user: AuthenticatedUser) {
-    const { actor } = await this.access.authorize(projectId, user);
+    const { project, actor } = await this.access.authorize(projectId, user);
+    this.access.assertOpenForChanges(project);
     this.assertCanManageMembers(actor);
 
     const email = dto.email.trim().toLowerCase()
@@ -80,6 +81,7 @@ export class ProjectMembersService {
 
   async remove(projectId: string, memberUserId: string, user: AuthenticatedUser) {
     const { project, actor } = await this.access.authorize(projectId, user);
+    this.access.assertOpenForChanges(project);
     this.assertCanManageMembers(actor);
 
     const membership = await this.membersRepository.findByProjectAndUser(

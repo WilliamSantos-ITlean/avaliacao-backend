@@ -4,7 +4,10 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { validationExceptionFactory } from './common/pipes/validation-exception.factory';
 import { ACCESS_TOKEN } from './common/swagger';
+
+const API_KEY = 'x-api-key';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -45,6 +48,7 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      exceptionFactory: validationExceptionFactory,
     }),
   );
 
@@ -52,15 +56,24 @@ async function bootstrap() {
     .setTitle('Gestão de projetos e times')
     .setDescription(
       [
-        'API da avaliação. A identidade de quem chama vem do JWT, nunca de um id no body.',
+        'API da avaliação. No **Authorize** preencha os dois campos: `x-api-key` (vale em toda rota) e o Bearer JWT (rotas privadas). A identidade sai do token, nunca de um id no body. `passwordHash` não aparece em resposta nenhuma.',
         '',
-        'Papéis: o cadastro nasce MEMBER. Só o ADMIN promove alguém a PROJECT_MANAGER. PROJECT_MANAGER e ADMIN criam projeto, e quem cria vira dono e membro.',
+        '### Papéis',
+        '- O cadastro nasce **MEMBER**.',
+        '- Só o **ADMIN** promove alguém a **PROJECT_MANAGER**.',
+        '- **PROJECT_MANAGER** e **ADMIN** criam projeto. Quem cria vira dono e membro.',
         '',
-        'Tarefa: TODO pode ir para IN_PROGRESS ou CANCELLED. IN_PROGRESS pode voltar para TODO, seguir para WAITING_MANAGER_APPROVE ou CANCELLED. Só PROJECT_MANAGER ou ADMIN saem de WAITING_MANAGER_APPROVE: aprovam (DONE), devolvem (IN_PROGRESS) ou cancelam. Ninguém vai direto para DONE.',
+        '### Tarefa',
+        '| De | Para | Quem |',
+        '| --- | --- | --- |',
+        '| `TODO` | `IN_PROGRESS`, `CANCELLED` | membro |',
+        '| `IN_PROGRESS` | `TODO`, `WAITING_MANAGER_APPROVE`, `CANCELLED` | membro |',
+        '| `WAITING_MANAGER_APPROVE` | `DONE`, `IN_PROGRESS`, `CANCELLED` | **PROJECT_MANAGER** ou **ADMIN** |',
         '',
-        'Projeto ARCHIVED rejeita criar ou mover tarefa, comentar e anexar (409). O responsável precisa ser membro do projeto (409). Prazo em feriado nacional também volta 409.',
+        'MEMBER nos três destinos da espera recebe **403**. Qualquer outro salto, inclusive ir direto para `DONE`, volta **409**.',
         '',
-        'passwordHash não aparece em resposta nenhuma.',
+        '### Projeto arquivado',
+        'Projeto `ARCHIVED` rejeita qualquer alteração (**409**): título, descrição, responsável e prazo. A saída é voltar para `ACTIVE`, ou apagar. O apagamento de projeto e de tarefa é lógico. Só o **ADMIN** lista e abre projetos apagados.',
       ].join('\n'),
     )
     .setVersion('1.0')
@@ -83,9 +96,27 @@ async function bootstrap() {
       },
       ACCESS_TOKEN,
     )
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'x-api-key',
+        in: 'header',
+        description: 'Valor de API_KEY no ambiente. O guard global exige este header em toda rota.',
+      },
+      API_KEY,
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
+  for (const pathItem of Object.values(document.paths)) {
+    for (const operation of Object.values(pathItem)) {
+      if (!operation || typeof operation !== 'object' || !('responses' in operation)) continue;
+      const security = operation.security ?? [];
+      operation.security = security.length
+        ? security.map((requirement) => ({ ...requirement, [API_KEY]: [] }))
+        : [{ [API_KEY]: [] }];
+    }
+  }
   SwaggerModule.setup('docs', app, document, {
     customSiteTitle: 'API — Gestão de projetos',
     swaggerOptions: { persistAuthorization: true },
