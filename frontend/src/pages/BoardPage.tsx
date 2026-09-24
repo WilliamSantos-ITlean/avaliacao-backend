@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, apiBlob } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import {
   dateInputToIso,
   formatBytes,
+  activityDetails,
+  activityTitle,
   formatDate,
   initials,
   nextMoves,
   PROJECT_LABEL,
+  ROLE_LABEL,
   TASK_COLUMNS,
   TASK_LABEL,
   timeAgo,
@@ -24,13 +27,14 @@ import {
   unwrapList,
 } from '../lib/parse';
 import { useToast } from '../lib/toast';
-import type { ActivityItem, Member, Project, Task, TaskComment, TaskFile, TaskStatus } from '../lib/types';
+import type { ActivityItem, Member, Project, Role, Task, TaskComment, TaskFile, TaskStatus } from '../lib/types';
 import { Empty, ErrorNote, Modal, StateFlow } from '../ui';
 
 type Tab = 'board' | 'members' | 'activity';
 
 export function BoardPage() {
   const { projectId = '' } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const toast = useToast();
   const [tab, setTab] = useState<Tab>('board');
@@ -123,6 +127,17 @@ export function BoardPage() {
     }
   }
 
+  async function removeProject() {
+    setSaveError(null);
+    try {
+      await api(`/projects/${projectId}`, { method: 'DELETE' });
+      toast('Projeto apagado.');
+      navigate('/');
+    } catch (cause) {
+      setSaveError(cause);
+    }
+  }
+
   async function toggleArchive() {
     if (!project) return;
     setSaveError(null);
@@ -161,11 +176,25 @@ export function BoardPage() {
             </span>
           </header>
 
-          {project.status === 'ARCHIVED' ? (
+          {project.deletedAt && user?.role === 'ADMIN' ? (
+            <p className="banner">
+              Projeto apagado. Só o admin ainda abre esta página. Criar ou mover tarefa deve responder 409.
+            </p>
+          ) : null}
+
+          {project.deletedAt && user?.role !== 'ADMIN' ? (
+            <p className="banner">Projeto apagado.</p>
+          ) : null}
+
+          {project.status === 'ARCHIVED' && !project.deletedAt && user?.role === 'ADMIN' ? (
             <p className="banner">
               Projeto arquivado. Criar ou mover tarefa deve responder 409. Os botões seguem ativos para você ver essa
               rejeição.
             </p>
+          ) : null}
+
+          {project.status === 'ARCHIVED' && !project.deletedAt && user?.role !== 'ADMIN' ? (
+            <p className="banner">Projeto arquivado.</p>
           ) : null}
 
           <form className="edit-bar" onSubmit={saveProject}>
@@ -183,6 +212,11 @@ export function BoardPage() {
             <button className="btn btn-danger" type="button" onClick={() => void toggleArchive()}>
               {project.status === 'ARCHIVED' ? 'Reativar' : 'Arquivar'}
             </button>
+            {user && !project.deletedAt && (user.role === 'ADMIN' || user.id === project.ownerId) ? (
+              <button className="btn btn-danger" type="button" onClick={() => void removeProject()}>
+                Apagar
+              </button>
+            ) : null}
           </form>
           <ErrorNote error={saveError} />
 
@@ -214,7 +248,7 @@ export function BoardPage() {
                 </button>
               </div>
               <ErrorNote error={tasksError} />
-              {oddTasks.length > 0 ? (
+              {user?.role === 'ADMIN' && oddTasks.length > 0 ? (
                 <p className="hint">
                   A API devolveu status fora do fluxo: {oddTasks.map((task) => `${task.title} (${task.rawStatus})`).join(', ')}.
                 </p>
@@ -243,7 +277,12 @@ export function BoardPage() {
           ) : null}
 
           {tab === 'activity' ? (
-            <ActivityPanel items={activities} error={activityError} onReload={() => void loadActivities()} />
+            <ActivityPanel
+              items={activities}
+              members={members}
+              error={activityError}
+              onReload={() => void loadActivities()}
+            />
           ) : null}
         </>
       ) : null}
@@ -266,6 +305,7 @@ export function BoardPage() {
           task={selected}
           members={members}
           role={user.role}
+          userId={user.id}
           onClose={() => setSelectedId(null)}
           onChanged={async () => {
             await loadCore();
@@ -328,6 +368,8 @@ function CreateTask({
   const [description, setDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
   const [due, setDue] = useState('');
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [error, setError] = useState<unknown>(null);
   const [pending, setPending] = useState(false);
 
@@ -374,13 +416,18 @@ function CreateTask({
               </option>
             ))}
           </select>
-          <small>Se escolher alguém, precisa ser membro. Senão a API responde 409.</small>
+          <small>
+            {isAdmin
+              ? 'Se escolher alguém, precisa ser membro. Senão a API responde 409.'
+              : 'O responsável precisa ser membro do projeto.'}
+          </small>
         </label>
         <label className="field">
           <span>Prazo</span>
           <input className="input" type="date" value={due} onChange={(event) => setDue(event.target.value)} />
           <small>
-            Feriado no prazo deve voltar 409. <Link to="/feriados">Ver feriados</Link>
+            {isAdmin ? 'Feriado no prazo deve voltar 409. ' : 'Prazo em feriado não é aceito. '}
+            <Link to="/feriados">Ver feriados</Link>
           </small>
         </label>
         <ErrorNote error={error} />
@@ -396,12 +443,14 @@ function TaskDrawer({
   task,
   members,
   role,
+  userId,
   onClose,
   onChanged,
 }: {
   task: Task;
   members: Member[];
-  role: NonNullable<ReturnType<typeof useAuth>['user']>['role'];
+  role: Role;
+  userId: string;
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
@@ -487,6 +536,40 @@ function TaskDrawer({
     }
   }
 
+  async function removeTask() {
+    setError(null);
+    try {
+      await api(`/tasks/${task.id}`, { method: 'DELETE' });
+      toast('Tarefa apagada.');
+      onClose();
+      await onChanged();
+    } catch (cause) {
+      setError(cause);
+    }
+  }
+
+  async function removeComment(commentId: string) {
+    setError(null);
+    try {
+      await api(`/tasks/${task.id}/comments/${commentId}`, { method: 'DELETE' });
+      toast('Comentário apagado.');
+      await loadSides();
+    } catch (cause) {
+      setError(cause);
+    }
+  }
+
+  async function removeFile(fileId: string) {
+    setSideError(null);
+    try {
+      await api(`/tasks/${task.id}/attachments/${fileId}`, { method: 'DELETE' });
+      toast('Anexo apagado.');
+      await loadSides();
+    } catch (cause) {
+      setSideError(cause);
+    }
+  }
+
   async function upload(file: File | null) {
     if (!file) return;
     setSideError(null);
@@ -535,9 +618,14 @@ function TaskDrawer({
             <span>Prazo</span>
             <input className="input" type="date" value={due} onChange={(event) => setDue(event.target.value)} />
           </label>
-          <button className="btn" type="submit">
-            Salvar dados
-          </button>
+          <div className="row">
+            <button className="btn" type="submit">
+              Salvar dados
+            </button>
+            <button className="btn btn-danger" type="button" onClick={() => void removeTask()}>
+              Apagar tarefa
+            </button>
+          </div>
         </form>
 
         <div className="move-row">
@@ -555,7 +643,11 @@ function TaskDrawer({
             <p className="hint">Aguardando gestor ou admin. Membro não aprova, não reprova e não cancela daqui.</p>
           ) : null}
           {task.status === 'DONE' || task.status === 'CANCELLED' ? (
-            <p className="hint">Estado final. A API deve recusar qualquer outro salto com 409.</p>
+            <p className="hint">
+              {role === 'ADMIN'
+                ? 'Estado final. A API deve recusar qualquer outro salto com 409.'
+                : 'Estado final.'}
+            </p>
           ) : null}
         </div>
 
@@ -569,6 +661,11 @@ function TaskDrawer({
                 <div className="row">
                   <strong>{comment.who}</strong>
                   <span className="muted">{timeAgo(comment.when)}</span>
+                  {role === 'ADMIN' || comment.authorId === userId ? (
+                    <button className="btn btn-small btn-danger" type="button" onClick={() => void removeComment(comment.id)}>
+                      Apagar
+                    </button>
+                  ) : null}
                 </div>
                 <p>{comment.body}</p>
               </li>
@@ -600,6 +697,11 @@ function TaskDrawer({
                 <span>
                   {file.mimeType} {formatBytes(file.size)}
                 </span>
+                {role === 'ADMIN' || file.uploadedById === userId ? (
+                  <button className="btn btn-small btn-danger" type="button" onClick={() => void removeFile(file.id)}>
+                    Apagar
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -614,7 +716,11 @@ function TaskDrawer({
               }}
             />
             <span>Escolher arquivo</span>
-            <small>JPEG ou PNG, até 2 MB. Tipo ou tamanho inválido volta 400. Projeto arquivado volta 409.</small>
+            <small>
+              {role === 'ADMIN'
+                ? 'JPEG ou PNG, até 2 MB. Tipo ou tamanho inválido volta 400. Projeto arquivado volta 409.'
+                : 'JPEG ou PNG, até 2 MB.'}
+            </small>
           </label>
           <ErrorNote error={sideError} />
         </section>
@@ -674,6 +780,8 @@ function MembersPanel({
   onChanged: () => Promise<void>;
 }) {
   const toast = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [who, setWho] = useState('');
   const [formError, setFormError] = useState<unknown>(null);
   const [pending, setPending] = useState(false);
@@ -720,7 +828,11 @@ function MembersPanel({
             placeholder="ana@email.com"
             required
           />
-          <small>A pessoa precisa já ter conta. E-mail inválido volta 400. Quem não existe volta 404. Repetir a pessoa volta 409.</small>
+          <small>
+            {isAdmin
+              ? 'A pessoa precisa já ter conta. E-mail inválido volta 400. Quem não existe volta 404. Repetir a pessoa volta 409.'
+              : 'A pessoa precisa já ter conta.'}
+          </small>
         </label>
         <button className="btn btn-primary" type="submit" disabled={pending}>
           Adicionar
@@ -736,7 +848,7 @@ function MembersPanel({
               <span className="avatar">{initials(member.email)}</span>
               <div>
                 <strong>{member.email}</strong>
-                <small>{member.userId}</small>
+                {member.role ? <small>{ROLE_LABEL[member.role]}</small> : null}
               </div>
               <button className="btn btn-small btn-danger" type="button" onClick={() => void remove(member.userId)}>
                 Remover
@@ -749,15 +861,26 @@ function MembersPanel({
   );
 }
 
+function displayWho(who: string) {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(who)) return 'alguém';
+  return who;
+}
+
 function ActivityPanel({
   items,
+  members,
   error,
   onReload,
 }: {
   items: ActivityItem[];
+  members: Member[];
   error: unknown;
   onReload: () => void;
 }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
+  const emails = new Map(members.map((member) => [member.userId, member.email]));
+
   return (
     <div className="stack">
       <div className="row">
@@ -767,19 +890,34 @@ function ActivityPanel({
       </div>
       <ErrorNote error={error} />
       {items.length === 0 && !error ? (
-        <Empty title="Nenhuma atividade" text="Criar projeto, membro, tarefa, comentário, anexo ou mudar estado deve gravar uma linha aqui." />
+        <Empty title="Nenhuma atividade" text="As mudanças do projeto aparecem aqui." />
       ) : null}
       <ol className="timeline">
-        {items.map((item) => (
-          <li key={item.id}>
-            <div className="row">
-              <strong>{item.action}</strong>
-              <span className="muted">{timeAgo(item.when)}</span>
-            </div>
-            <p>{item.who}</p>
-            {item.metadata ? <pre className="traffic-pre">{JSON.stringify(item.metadata, null, 2)}</pre> : null}
-          </li>
-        ))}
+        {items.map((item) => {
+          const details = activityDetails(item.metadata, emails);
+          return (
+            <li key={item.id}>
+              <div className="row">
+                <strong>{activityTitle(item.action)}</strong>
+                <span className="muted">{timeAgo(item.when)}</span>
+              </div>
+              <p>{displayWho(item.who)}</p>
+              {details.length > 0 ? (
+                <ul className="activity-lines">
+                  {details.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {isAdmin && item.metadata ? (
+                <details className="activity-json">
+                  <summary>JSON</summary>
+                  <pre className="traffic-pre">{JSON.stringify(item.metadata, null, 2)}</pre>
+                </details>
+              ) : null}
+            </li>
+          );
+        })}
       </ol>
     </div>
   );

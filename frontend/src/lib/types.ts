@@ -22,6 +22,7 @@ export type Project = {
   status: ProjectStatus;
   ownerId?: string;
   createdAt?: string;
+  deletedAt?: string | null;
 };
 
 export type Member = {
@@ -49,6 +50,7 @@ export type TaskComment = {
   body: string;
   when?: string;
   who: string;
+  authorId?: string;
 };
 
 export type TaskFile = {
@@ -57,6 +59,7 @@ export type TaskFile = {
   mimeType?: string;
   size?: number;
   createdAt?: string;
+  uploadedById?: string;
 };
 
 export type ActivityItem = {

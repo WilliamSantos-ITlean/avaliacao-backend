@@ -100,7 +100,7 @@ export function messageFrom(body: unknown, status: number) {
     if (typeof message === 'string' && message.trim()) return message;
   }
   if (status === 0) return 'Sem resposta da API.';
-  return `A API respondeu ${status}.`;
+  return 'Não foi possível concluir.';
 }
 
 function isApiKeyRejection(body: unknown) {

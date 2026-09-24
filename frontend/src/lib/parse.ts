@@ -38,6 +38,7 @@ export function parseProject(payload: unknown): Project | null {
     status,
     ownerId: text(row.ownerId),
     createdAt: text(row.createdAt),
+    deletedAt: text(row.deletedAt) ?? null,
   };
 }
 
@@ -92,6 +93,7 @@ export function parseComment(raw: unknown): TaskComment | null {
     body,
     when: text(row.createdAt),
     who: text(author?.email) ?? text(row.authorEmail) ?? text(row.authorId) ?? 'alguém',
+    authorId: text(row.authorId) ?? text(author?.id),
   };
 }
 
@@ -101,12 +103,15 @@ export function parseFile(raw: unknown): TaskFile | null {
   const id = text(row.id);
   const filename = text(row.filename) ?? text(row.originalName) ?? text(row.name);
   if (!id || !filename) return null;
+  const uploadedBy =
+    row.uploadedBy && typeof row.uploadedBy === 'object' ? (row.uploadedBy as Record<string, unknown>) : undefined;
   return {
     id,
     filename,
     mimeType: text(row.mimeType) ?? text(row.mimetype),
     size: typeof row.size === 'number' ? row.size : undefined,
     createdAt: text(row.createdAt),
+    uploadedById: text(row.uploadedById) ?? text(uploadedBy?.id),
   };
 }
 

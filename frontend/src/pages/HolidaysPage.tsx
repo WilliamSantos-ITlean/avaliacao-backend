@@ -1,10 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { parseHolidays } from '../lib/parse';
 import type { Holiday } from '../lib/types';
 import { ErrorNote } from '../ui';
 
 export function HolidaysPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [error, setError] = useState<unknown>(null);
@@ -36,8 +39,14 @@ export function HolidaysPage() {
         <p className="kicker">Integração</p>
         <h1 className="page-title">Feriados</h1>
         <p className="lead">
-          <code>GET /holidays?year=</code> passa pelo HttpService. A URL fica no ambiente, não no service de tarefa.
-          Prazo de tarefa em feriado deve ser recusado com 409.
+          {isAdmin ? (
+            <>
+              <code>GET /holidays?year=</code> passa pelo HttpService. A URL fica no ambiente, não no service de tarefa.
+              Prazo de tarefa em feriado deve ser recusado com 409.
+            </>
+          ) : (
+            'Consulta os feriados do ano. O prazo de uma tarefa não pode cair num feriado.'
+          )}
         </p>
       </header>
 
@@ -49,7 +58,9 @@ export function HolidaysPage() {
         <button className="btn btn-primary" type="submit" disabled={pending}>
           {pending ? 'Consultando…' : 'Consultar'}
         </button>
-        <small>Um ano inválido, ou a API externa fora, deve falhar de forma controlada — status e mensagem, não 500 cru.</small>
+        {isAdmin ? (
+          <small>Um ano inválido, ou a API externa fora, deve falhar de forma controlada — status e mensagem, não 500 cru.</small>
+        ) : null}
       </form>
 
       <ErrorNote error={error} />

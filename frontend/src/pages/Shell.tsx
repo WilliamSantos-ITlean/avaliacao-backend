@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { CalendarDays, FlaskConical, FolderKanban, Users } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { api, getApiBase, getApiKey, setApiBase, setApiKey } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { ROLE_LABEL } from '../lib/format';
+import { isManager, ROLE_LABEL } from '../lib/format';
 import { useToast } from '../lib/toast';
 import { useTraffic } from '../lib/traffic';
 import { Mark } from '../ui';
 
 const LINKS = [
-  { to: '/', label: 'Projetos', end: true },
-  { to: '/pessoas', label: 'Pessoas', end: false },
-  { to: '/feriados', label: 'Feriados', end: false },
-  { to: '/laboratorio', label: 'Laboratório', end: false },
+  { to: '/', label: 'Projetos', end: true, admin: false, manager: false, icon: FolderKanban },
+  { to: '/pessoas', label: 'Pessoas', end: false, admin: false, manager: true, icon: Users },
+  { to: '/feriados', label: 'Feriados', end: false, admin: false, manager: false, icon: CalendarDays },
+  { to: '/laboratorio', label: 'Laboratório', end: false, admin: true, manager: false, icon: FlaskConical },
 ];
 
 export function Shell() {
   const { user, logout, fromJwt, token } = useAuth();
+  const location = useLocation();
   const toast = useToast();
   const { entries, clear } = useTraffic();
   const [base, setBase] = useState(getApiBase);
@@ -36,6 +39,12 @@ export function Shell() {
     void check();
   }, [base, apiKey]);
 
+  const isAdmin = user?.role === 'ADMIN';
+  const links = LINKS.filter((link) => {
+    if (link.admin && !isAdmin) return false;
+    if (link.manager && (!user || !isManager(user.role))) return false;
+    return true;
+  });
   const last = entries[0];
   const hot = last ? last.status === 0 || last.status >= 400 : false;
 
@@ -51,13 +60,14 @@ export function Shell() {
             </span>
           </p>
           <nav className="nav">
-            {LINKS.map((link) => (
+            {links.map((link) => (
               <NavLink
                 key={link.to}
                 to={link.to}
                 end={link.end}
                 className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
               >
+                <link.icon size={16} strokeWidth={1.75} />
                 {link.label}
               </NavLink>
             ))}
@@ -104,8 +114,8 @@ export function Shell() {
                 <strong className="user-mail">{user.email}</strong>
                 <span className={`role-pill role-${user.role}`}>{ROLE_LABEL[user.role]}</span>
               </div>
-              {fromJwt ? (
-                <small>Sessão lida do JWT. Quando `GET /auth/me` devolver o usuário, o perfil passa a vir da API.</small>
+              {fromJwt && user.role === 'ADMIN' ? (
+                <small>Sessão lida do JWT. Quando GET /auth/me devolver o usuário, o perfil passa a vir da API.</small>
               ) : null}
               <div className="row">
                 <button
@@ -140,19 +150,31 @@ export function Shell() {
       </aside>
 
       <div className="canvas">
-        <Outlet />
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
       </div>
 
-      <button
-        className={`traffic-toggle${hot ? ' hot' : ''}`}
-        type="button"
-        onClick={() => setOpenTraffic((open) => !open)}
-      >
-        Tráfego
-        <span>{entries.length}</span>
-      </button>
+      {isAdmin ? (
+        <button
+          className={`traffic-toggle${hot ? ' hot' : ''}`}
+          type="button"
+          onClick={() => setOpenTraffic((open) => !open)}
+        >
+          Tráfego
+          <span>{entries.length}</span>
+        </button>
+      ) : null}
 
-      {openTraffic ? (
+      {isAdmin && openTraffic ? (
         <section className="traffic-panel" aria-label="Últimas chamadas">
           <header className="row">
             <strong>Últimas chamadas</strong>

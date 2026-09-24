@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './lib/auth';
+import { isManager } from './lib/format';
 import { BoardPage } from './pages/BoardPage';
 import { LoginPage, RegisterPage } from './pages/Gate';
 import { HolidaysPage } from './pages/HolidaysPage';
@@ -15,6 +16,18 @@ function RequireAuth() {
   return <Shell />;
 }
 
+function RequireAdmin() {
+  const { user } = useAuth();
+  if (user?.role !== 'ADMIN') return <Navigate to="/" replace />;
+  return <LabPage />;
+}
+
+function RequireManager() {
+  const { user } = useAuth();
+  if (!user || !isManager(user.role)) return <Navigate to="/" replace />;
+  return <PeoplePage />;
+}
+
 export function App() {
   return (
     <Routes>
@@ -23,9 +36,9 @@ export function App() {
       <Route element={<RequireAuth />}>
         <Route index element={<ProjectsPage />} />
         <Route path="projetos/:projectId" element={<BoardPage />} />
-        <Route path="pessoas" element={<PeoplePage />} />
+        <Route path="pessoas" element={<RequireManager />} />
         <Route path="feriados" element={<HolidaysPage />} />
-        <Route path="laboratorio" element={<LabPage />} />
+        <Route path="laboratorio" element={<RequireAdmin />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

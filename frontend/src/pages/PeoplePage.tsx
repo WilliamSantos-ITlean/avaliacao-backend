@@ -14,6 +14,7 @@ export function PeoplePage() {
   const toast = useToast();
   const [people, setPeople] = useState<SessionUser[]>(() => readPeople());
   const [userId, setUserId] = useState('');
+  const [pickedEmail, setPickedEmail] = useState('');
   const [role, setRole] = useState<Role>('PROJECT_MANAGER');
   const [error, setError] = useState<unknown>(null);
   const [pending, setPending] = useState(false);
@@ -47,6 +48,7 @@ export function PeoplePage() {
         return;
       }
       setUserId(found.id);
+      setPickedEmail(found.email);
       setRole(found.role);
       toast('Usuário encontrado na API.');
     } catch (cause) {
@@ -60,8 +62,9 @@ export function PeoplePage() {
         <p className="kicker">Papéis</p>
         <h1 className="page-title">Pessoas</h1>
         <p className="lead">
-          Só o admin promove. O endpoint do MVP é <code>PATCH /users/:id/role</code>. A lista abaixo é deste navegador,
-          dos cadastros feitos aqui — a API não é obrigada a ter <code>GET /users</code>.
+          {user?.role === 'ADMIN'
+            ? 'Só o admin promove. O endpoint do MVP é PATCH /users/:id/role. A lista abaixo é deste navegador, dos cadastros feitos aqui — a API não é obrigada a ter GET /users.'
+            : 'Só o admin promove alguém de membro para gestor.'}
         </p>
       </header>
 
@@ -108,8 +111,8 @@ export function PeoplePage() {
         </tbody>
       </table>
 
-      {user?.role !== 'ADMIN' ? (
-        <p className="banner">Você não é admin. Pode disparar mesmo assim: o esperado é 403.</p>
+      {user?.role === 'ADMIN' ? (
+        <p className="banner">Quem não é admin pode disparar a promoção: o esperado é 403.</p>
       ) : null}
 
       <form className="edit-bar" onSubmit={lookup}>
@@ -123,7 +126,11 @@ export function PeoplePage() {
             placeholder="opcional — GET /users?email="
             required
           />
-          <small>Se der 404, o módulo de listagem ainda não existe. Use o id copiado na barra.</small>
+          <small>
+            {user?.role === 'ADMIN'
+              ? 'Se der 404, o módulo de listagem ainda não existe. Use o id copiado na barra.'
+              : 'A busca usa o e-mail.'}
+          </small>
         </label>
         <button className="btn" type="submit">
           Buscar
@@ -133,8 +140,12 @@ export function PeoplePage() {
 
       <form className="edit-bar" onSubmit={promote}>
         <label className="field grow">
-          <span>Id do usuário</span>
-          <input className="input" value={userId} onChange={(event) => setUserId(event.target.value)} required spellCheck={false} />
+          <span>{user?.role === 'ADMIN' ? 'Id do usuário' : 'Pessoa'}</span>
+          {user?.role === 'ADMIN' ? (
+            <input className="input" value={userId} onChange={(event) => setUserId(event.target.value)} required spellCheck={false} />
+          ) : (
+            <input className="input" value={pickedEmail} readOnly placeholder="Busque pelo e-mail" required={!userId} />
+          )}
         </label>
         <label className="field">
           <span>Novo papel</span>
@@ -158,18 +169,20 @@ export function PeoplePage() {
             <span className={`role-pill role-${person.role}`}>{ROLE_LABEL[person.role]}</span>
             <div>
               <strong>{person.email}</strong>
-              <small>{person.id}</small>
             </div>
-            <button
-              className="btn btn-small"
-              type="button"
-              onClick={() => {
-                setUserId(person.id);
-                setRole(person.role === 'MEMBER' ? 'PROJECT_MANAGER' : person.role);
-              }}
-            >
-              Usar este id
-            </button>
+            {user?.role === 'ADMIN' ? (
+              <button
+                className="btn btn-small"
+                type="button"
+                onClick={() => {
+                  setUserId(person.id);
+                  setPickedEmail(person.email);
+                  setRole(person.role === 'MEMBER' ? 'PROJECT_MANAGER' : person.role);
+                }}
+              >
+                Usar
+              </button>
+            ) : null}
           </li>
         ))}
       </ul>

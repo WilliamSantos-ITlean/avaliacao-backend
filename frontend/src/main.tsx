@@ -1,9 +1,5 @@
-import '@fontsource/fraunces/500.css';
-import '@fontsource/fraunces/600.css';
-import '@fontsource/fraunces/600-italic.css';
-import '@fontsource/outfit/400.css';
-import '@fontsource/outfit/500.css';
-import '@fontsource/outfit/600.css';
+import '@fontsource-variable/source-sans-3';
+import '@fontsource-variable/source-serif-4';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
@@ -16,13 +12,13 @@ import './styles.css';
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <TrafficProvider>
-        <ToastProvider>
-          <AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <TrafficProvider>
             <App />
-          </AuthProvider>
-        </ToastProvider>
-      </TrafficProvider>
+          </TrafficProvider>
+        </AuthProvider>
+      </ToastProvider>
     </BrowserRouter>
   </StrictMode>,
 );

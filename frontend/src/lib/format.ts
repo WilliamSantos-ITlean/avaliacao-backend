@@ -115,6 +115,72 @@ export function toDateInput(iso?: string | null) {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
+const ACTION_LABEL: Record<string, string> = {
+  PROJECT_CREATED: 'Criou o projeto',
+  PROJECT_UPDATED: 'Atualizou o projeto',
+  PROJECT_ARCHIVED: 'Arquivou o projeto',
+  PROJECT_DELETED: 'Apagou o projeto',
+  MEMBER_ADDED: 'Adicionou um membro',
+  MEMBER_REMOVED: 'Removeu um membro',
+  TASK_CREATED: 'Criou uma tarefa',
+  TASK_UPDATED: 'Atualizou uma tarefa',
+  TASK_STATUS_CHANGED: 'Mudou o estado da tarefa',
+  TASK_DELETED: 'Apagou uma tarefa',
+  COMMENT_CREATED: 'Publicou um comentário',
+  COMMENT_DELETED: 'Apagou um comentário',
+  ATTACHMENT_UPLOADED: 'Enviou um anexo',
+  ATTACHMENT_DELETED: 'Apagou um anexo',
+};
+
+export function activityTitle(action: string) {
+  return ACTION_LABEL[action] ?? action.replaceAll('_', ' ').toLowerCase();
+}
+
+export function activityDetails(metadata: unknown, emails: Map<string, string>) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return [];
+  const row = metadata as Record<string, unknown>;
+  const lines: string[] = [];
+  const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : '');
+  const person = (id: unknown) => {
+    const raw = text(id);
+    if (!raw) return '';
+    return emails.get(raw) ?? '';
+  };
+
+  const email = text(row.email) || person(row.userId);
+  if (email) lines.push(email);
+
+  const name = text(row.name) || text(row.title) || text(row.filename);
+  if (name) lines.push(name);
+
+  const description = text(row.description);
+  if (description) lines.push(description);
+
+  if ('from' in row || 'to' in row) {
+    lines.push(`${statusLabel(row.from)} → ${statusLabel(row.to)}`);
+  } else if (text(row.status)) {
+    lines.push(statusLabel(row.status));
+  }
+
+  if ('assigneeId' in row) {
+    if (row.assigneeId === null) lines.push('Sem responsável');
+    else lines.push(person(row.assigneeId) ? `Responsável: ${person(row.assigneeId)}` : 'Responsável alterado');
+  }
+
+  if ('dueDate' in row) {
+    lines.push(row.dueDate ? `Prazo: ${formatDate(text(row.dueDate))}` : 'Prazo removido');
+  }
+
+  return lines;
+}
+
+function statusLabel(value: unknown) {
+  if (typeof value !== 'string') return '—';
+  if (isTaskStatus(value)) return TASK_LABEL[value];
+  if (value === 'ACTIVE' || value === 'ARCHIVED') return PROJECT_LABEL[value];
+  return value;
+}
+
 export function dateInputToIso(value: string) {
   if (!value) return null;
   return new Date(`${value}T12:00:00.000Z`).toISOString();
