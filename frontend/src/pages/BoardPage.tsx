@@ -271,6 +271,7 @@ export function BoardPage() {
             <MembersPanel
               projectId={projectId}
               members={members}
+              tasks={tasks}
               error={membersError}
               onChanged={loadCore}
             />
@@ -768,14 +769,24 @@ function AttachmentImage({
   return <img className="file-preview" src={src} alt={filename} />;
 }
 
+const OPEN_TASK_STATUSES = new Set<TaskStatus>(['TODO', 'IN_PROGRESS', 'WAITING_MANAGER_APPROVE']);
+
+function hasOpenTask(tasks: Task[], userId: string) {
+  return tasks.some(
+    (task) => task.assigneeId === userId && task.status !== null && OPEN_TASK_STATUSES.has(task.status),
+  );
+}
+
 function MembersPanel({
   projectId,
   members,
+  tasks,
   error,
   onChanged,
 }: {
   projectId: string;
   members: Member[];
+  tasks: Task[];
   error: unknown;
   onChanged: () => Promise<void>;
 }) {
@@ -817,8 +828,8 @@ function MembersPanel({
   return (
     <div className="stack">
       <ErrorNote error={error} />
-      <form className="edit-bar" onSubmit={add}>
-        <label className="field grow">
+      <form className="member-add" onSubmit={add}>
+        <label className="field">
           <span>E-mail</span>
           <input
             className="input"
@@ -828,33 +839,48 @@ function MembersPanel({
             placeholder="ana@email.com"
             required
           />
-          <small>
-            {isAdmin
-              ? 'A pessoa precisa já ter conta. E-mail inválido volta 400. Quem não existe volta 404. Repetir a pessoa volta 409.'
-              : 'A pessoa precisa já ter conta.'}
-          </small>
         </label>
         <button className="btn btn-primary" type="submit" disabled={pending}>
           Adicionar
         </button>
+        <small className="member-add-hint">
+          {isAdmin
+            ? 'A pessoa precisa já ter conta. E-mail inválido volta 400. Quem não existe volta 404. Repetir a pessoa volta 409. Quem ainda é responsável de uma tarefa em aberto também volta 409.'
+            : 'A pessoa precisa já ter conta. Quem ainda é responsável de uma tarefa a fazer, em andamento ou aguardando aprovação não pode sair.'}
+        </small>
       </form>
       <ErrorNote error={formError} />
       {members.length === 0 ? (
         <Empty title="Sem membros nesta resposta" text="O criador do projeto também deve aparecer como membro, se essa for a regra do service." />
       ) : (
         <ul className="people-list">
-          {members.map((member) => (
-            <li key={member.id}>
-              <span className="avatar">{initials(member.email)}</span>
-              <div>
-                <strong>{member.email}</strong>
-                {member.role ? <small>{ROLE_LABEL[member.role]}</small> : null}
-              </div>
-              <button className="btn btn-small btn-danger" type="button" onClick={() => void remove(member.userId)}>
-                Remover
-              </button>
-            </li>
-          ))}
+          {members.map((member) => {
+            const blocked = hasOpenTask(tasks, member.userId);
+
+            return (
+              <li key={member.id}>
+                <span className="avatar">{initials(member.email)}</span>
+                <div>
+                  <strong>{member.email}</strong>
+                  {member.role ? <small>{ROLE_LABEL[member.role]}</small> : null}
+                  {blocked ? <small>Responsável de uma tarefa em aberto</small> : null}
+                </div>
+                <button
+                  className="btn btn-small btn-danger"
+                  type="button"
+                  disabled={blocked}
+                  title={
+                    blocked
+                      ? 'Passe a tarefa para outra pessoa, conclua ou cancele, antes de remover.'
+                      : undefined
+                  }
+                  onClick={() => void remove(member.userId)}
+                >
+                  Remover
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

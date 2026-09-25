@@ -22,13 +22,18 @@ import {
 } from './repositories/tasks.repository';
 import { ProjectMembersRepository } from '../projects/repositories/project-members.repository';
 import { HolidaysService } from '../holidays/holidays.service';
+import { UsersRepository } from '../users/users.repository';
+import { TaskAccess } from './task-access';
+import { assertTaskAcceptsChanges } from './task-rules';
 
 @Injectable()
 export class TasksService {
   constructor(
     private readonly access: ProjectAccessService,
+    private readonly tasks: TaskAccess,
     private readonly holidays: HolidaysService,
     private readonly unitOfWork: UnitOfWork,
+    private readonly usersRepository: UsersRepository,
     private readonly membersRepository: ProjectMembersRepository,
     private readonly tasksRepository: TasksRepository,
     private readonly activitiesRepository: ActivitiesRepository,
@@ -80,17 +85,18 @@ export class TasksService {
   }
 
   async findOne(id: string, user: AuthenticatedUser) {
-    const task = await this.requireTask(id);
+    const task = await this.tasks.require(id);
     const { actor } = await this.access.authorize(task.projectId, user);
-    this.hideDeletedTask(task, actor);
+    this.tasks.hideDeleted(task, actor);
     return task;
   }
 
   async update(id: string, dto: UpdateTaskDto, user: AuthenticatedUser) {
-    const task = await this.requireTask(id);
+    const task = await this.tasks.require(id);
     const { project, actor } = await this.access.authorize(task.projectId, user);
-    this.rejectDeletedTask(task, actor);
+    this.tasks.rejectDeleted(task, actor);
     this.access.assertOpenForChanges(project);
+    assertTaskAcceptsChanges(task.status);
 
     if (
       dto.title === undefined &&
@@ -138,13 +144,13 @@ export class TasksService {
     dto: UpdateTaskStatusDto,
     user: AuthenticatedUser,
   ) {
-    const task = await this.requireTask(id);
+    const task = await this.tasks.require(id);
     const { project, actor } = await this.access.authorize(
       task.projectId,
       user,
     );
 
-    this.rejectDeletedTask(task, actor);
+    this.tasks.rejectDeleted(task, actor);
     this.access.assertOpenForChanges(project);
 
     if (dto.status === task.status) {
@@ -176,11 +182,11 @@ export class TasksService {
   }
 
   async remove(id: string, user: AuthenticatedUser) {
-    const task = await this.requireTask(id);
+    const task = await this.tasks.require(id);
     const { project, actor } = await this.access.authorize(task.projectId, user);
 
     if (task.deletedAt) {
-      this.hideDeletedTask(task, actor);
+      this.tasks.hideDeleted(task, actor);
       throw new ConflictException('Tarefa já foi apagada');
     }
 
@@ -204,30 +210,6 @@ export class TasksService {
 
       return removed;
     });
-  }
-
-  private hideDeletedTask(task: TaskView, actor: AuthenticatedUser): void {
-    if (task.deletedAt && actor.role !== Role.ADMIN) {
-      throw new NotFoundException('Tarefa não encontrada');
-    }
-  }
-
-  private rejectDeletedTask(task: TaskView, actor: AuthenticatedUser): void {
-    this.hideDeletedTask(task, actor);
-
-    if (task.deletedAt) {
-      throw new ConflictException('Tarefa apagada não aceita alterações');
-    }
-  }
-
-  private async requireTask(id: string): Promise<TaskView> {
-    const task = await this.tasksRepository.findById(id);
-
-    if (!task) {
-      throw new NotFoundException('Tarefa não encontrada');
-    }
-
-    return task;
   }
 
   private descriptionOrNull(value?: string): string | null {
@@ -296,6 +278,13 @@ export class TasksService {
     if (!assigneeId) {
       return;
     }
+
+    const assignee = await this.usersRepository.findById(assigneeId);
+
+    if (!assignee) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
     const membership = await this.membersRepository.findByProjectAndUser(
       projectId,
       assigneeId,

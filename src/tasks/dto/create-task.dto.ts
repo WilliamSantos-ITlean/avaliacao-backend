@@ -34,7 +34,7 @@ export class CreateTaskDto {
 
   @ApiPropertyOptional({
     format: 'uuid',
-    description: 'Id de um membro do projeto. Quem não é membro volta 409.',
+    description: 'Id de um membro do projeto. Usuário inexistente volta 404. Quem não é membro volta 409.',
   })
   @IsOptional()
   @IsUUID(undefined, { message: 'O responsável deve ser um UUID válido.' })

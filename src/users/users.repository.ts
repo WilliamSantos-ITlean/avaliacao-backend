@@ -9,6 +9,14 @@ const publicUserSelect = {
   createdAt: true,
 } as const;
 
+const credentialSelect = {
+  id: true,
+  email: true,
+  role: true,
+  passwordHash: true,
+  createdAt: true,
+} as const;
+
 @Injectable()
 export class UsersRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -23,8 +31,22 @@ export class UsersRepository {
   findByEmail(email: string) {
     return this.prisma.user.findUnique({
       where: { email },
-      select: publicUserSelect
-    })
+      select: publicUserSelect,
+    });
+  }
+
+  findCredentialsByEmail(email: string) {
+    return this.prisma.user.findUnique({
+      where: { email },
+      select: credentialSelect,
+    });
+  }
+
+  createMember(data: { email: string; passwordHash: string; role: Role }) {
+    return this.prisma.user.create({
+      data,
+      select: publicUserSelect,
+    });
   }
 
   updateRole(id: string, role: Role) {

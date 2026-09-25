@@ -38,7 +38,7 @@ export class UpdateTaskDto {
   @ApiPropertyOptional({
     format: 'uuid',
     nullable: true,
-    description: 'Novo responsável, que precisa ser membro. null tira o responsável.',
+    description: 'Novo responsável, que precisa ser membro. Usuário inexistente volta 404. Quem não é membro volta 409. null tira o responsável.',
   })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)

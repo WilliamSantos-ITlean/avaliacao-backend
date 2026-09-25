@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthorizationModule } from '../common/authorization.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { TasksRepository } from '../tasks/repositories/tasks.repository';
 import { UsersModule } from '../users/users.module';
 import { ActivitiesController } from './activities.controller';
 import { ActivitiesService } from './activities.service';
@@ -28,6 +29,7 @@ import { ProjectsRepository } from './repositories/projects.repository';
     ProjectsRepository,
     ProjectMembersRepository,
     ActivitiesRepository,
+    TasksRepository,
   ],
   exports: [
     ProjectAccessService,

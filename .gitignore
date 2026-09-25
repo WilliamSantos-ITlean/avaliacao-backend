@@ -13,9 +13,6 @@ logs
 *.log
 npm-debug.log*
 
-# tests / coverage
-/coverage
-
 # uploads locais (vamos usar depois)
 /uploads
 

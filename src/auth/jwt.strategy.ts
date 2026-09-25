@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Role } from '../../generated/prisma/enums';
+import { UsersRepository } from '../users/users.repository';
 
 type JwtPayload = {
   sub: string;
@@ -12,7 +13,10 @@ type JwtPayload = {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly users: UsersRepository,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -20,11 +24,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  validate(payload: JwtPayload) {
+  async validate(payload: JwtPayload) {
+    const current = await this.users.findById(payload.sub);
+
+    if (!current) {
+      throw new UnauthorizedException('Usuário não encontrado');
+    }
+
     return {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role,
+      id: current.id,
+      email: current.email,
+      role: current.role,
     };
   }
 }

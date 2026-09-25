@@ -72,6 +72,8 @@ async function bootstrap() {
         '',
         'MEMBER nos três destinos da espera recebe **403**. Qualquer outro salto, inclusive ir direto para `DONE`, volta **409**.',
         '',
+        '`DONE` e `CANCELLED` não aceitam edição, comentário nem anexo (**409**). Repetir o status atual responde **200**. Apagar a tarefa continua permitido.',
+        '',
         '### Projeto arquivado',
         'Projeto `ARCHIVED` rejeita qualquer alteração (**409**): título, descrição, responsável e prazo. A saída é voltar para `ACTIVE`, ou apagar. O apagamento de projeto e de tarefa é lógico. Só o **ADMIN** lista e abre projetos apagados.',
       ].join('\n'),

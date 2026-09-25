@@ -73,12 +73,16 @@ export class ProjectMembersController {
   @ApiUuidParam('userId', 'Id do usuário a remover. Não é o id da linha ProjectMember.')
   @ApiOperation({
     summary: 'Remover membro',
-    description: 'PROJECT_MANAGER membro ou ADMIN. O dono do projeto não pode ser removido.',
+    description:
+      'PROJECT_MANAGER membro ou ADMIN. O dono do projeto não pode ser removido. Quem ainda é responsável de uma tarefa em aberto (TODO, IN_PROGRESS ou WAITING_MANAGER_APPROVE, e não apagada) também recebe 409. Tarefa DONE, CANCELLED ou apagada não impede a saída.',
   })
   @ApiOkResponse({ description: 'Vínculo removido.' })
   @ApiForbiddenResponse({ description: 'MEMBER não gerencia membros, ou quem chama não participa do projeto.' })
   @ApiNotFoundResponse({ description: 'Projeto inexistente ou essa pessoa não é membro.' })
-  @ApiConflictResponse({ description: 'O dono do projeto precisa continuar membro.' })
+  @ApiConflictResponse({
+    description:
+      'O dono do projeto precisa continuar membro, ou este membro ainda é responsável de uma tarefa em aberto.',
+  })
   remove(
     @CurrentUser() user: AuthenticatedUser,
     @Param('projectId', ParseUUIDPipe) projectId: string,

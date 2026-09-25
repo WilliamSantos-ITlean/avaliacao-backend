@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -11,6 +10,7 @@ import { UnitOfWork } from '../prisma/unit-of-work';
 import { ActivityAction } from '../projects/activity-actions';
 import { ProjectAccessService } from '../projects/project-access.service';
 import { ActivitiesRepository } from '../projects/repositories/activities.repository';
+import { TaskAccess } from './task-access';
 import { AttachmentStorage } from './attachment-storage';
 import {
   IMAGE_MIME,
@@ -20,7 +20,7 @@ import {
   MAX_IMAGE_BYTES,
 } from './image-upload.rules';
 import { AttachmentsRepository } from './repositories/attachments.repository';
-import { TasksRepository, TaskView } from './repositories/tasks.repository';
+import { assertTaskAcceptsChanges } from './task-rules';
 
 export type UploadedImage = {
   originalname: string;
@@ -33,9 +33,9 @@ export type UploadedImage = {
 export class AttachmentsService {
   constructor(
     private readonly access: ProjectAccessService,
+    private readonly tasks: TaskAccess,
     private readonly storage: AttachmentStorage,
     private readonly unitOfWork: UnitOfWork,
-    private readonly tasksRepository: TasksRepository,
     private readonly attachmentsRepository: AttachmentsRepository,
     private readonly activitiesRepository: ActivitiesRepository,
   ) {}
@@ -43,14 +43,15 @@ export class AttachmentsService {
   async create(taskId: string, file: UploadedImage, user: AuthenticatedUser) {
     this.assertImage(file);
 
-    const task = await this.requireTask(taskId);
+    const task = await this.tasks.require(taskId);
     const { actor, project } = await this.access.authorize(
       task.projectId,
       user,
     );
 
-    this.rejectDeletedTask(task, actor);
+    this.tasks.rejectDeleted(task, actor);
     this.access.assertOpenForChanges(project);
+    assertTaskAcceptsChanges(task.status);
 
     const storedPath = await this.storage.save(task.id, file);
 
@@ -91,10 +92,11 @@ export class AttachmentsService {
   }
 
   async remove(taskId: string, attachmentId: string, user: AuthenticatedUser) {
-    const task = await this.requireTask(taskId);
+    const task = await this.tasks.require(taskId);
     const { actor, project } = await this.access.authorize(task.projectId, user);
-    this.rejectDeletedTask(task, actor);
+    this.tasks.rejectDeleted(task, actor);
     this.access.assertOpenForChanges(project);
+    assertTaskAcceptsChanges(task.status);
     const attachment = await this.attachmentsRepository.findById(attachmentId);
 
     if (!attachment || attachment.taskId !== task.id) {
@@ -130,16 +132,16 @@ export class AttachmentsService {
   }
 
   async list(taskId: string, user: AuthenticatedUser) {
-    const task = await this.requireTask(taskId);
+    const task = await this.tasks.require(taskId);
     const { actor } = await this.access.authorize(task.projectId, user);
-    this.hideDeletedTask(task, actor);
+    this.tasks.hideDeleted(task, actor);
     return this.attachmentsRepository.listByTask(task.id);
   }
 
   async open(taskId: string, attachmentId: string, user: AuthenticatedUser) {
-    const task = await this.requireTask(taskId);
+    const task = await this.tasks.require(taskId);
     const { actor } = await this.access.authorize(task.projectId, user);
-    this.hideDeletedTask(task, actor);
+    this.tasks.hideDeleted(task, actor);
 
     const attachment = await this.attachmentsRepository.findById(attachmentId);
 
@@ -184,29 +186,5 @@ export class AttachmentsService {
     const cleaned = base.replace(/[^\w.\- ()]/g, '_').slice(0, 180);
 
     return cleaned || fallback;
-  }
-
-  private hideDeletedTask(task: TaskView, actor: AuthenticatedUser): void {
-    if (task.deletedAt && actor.role !== Role.ADMIN) {
-      throw new NotFoundException('Tarefa não encontrada');
-    }
-  }
-
-  private rejectDeletedTask(task: TaskView, actor: AuthenticatedUser): void {
-    this.hideDeletedTask(task, actor);
-
-    if (task.deletedAt) {
-      throw new ConflictException('Tarefa apagada não aceita alterações');
-    }
-  }
-
-  private async requireTask(id: string): Promise<TaskView> {
-    const task = await this.tasksRepository.findById(id);
-
-    if (!task) {
-      throw new NotFoundException('Tarefa não encontrada');
-    }
-
-    return task;
   }
 }

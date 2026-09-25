@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
+import { ActivityAction } from '../activity-actions';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export type ActivityRecord = {
   actorId: string;
-  action: string;
+  action: ActivityAction;
   projectId: string;
   taskId?: string;
   metadata?: Prisma.InputJsonValue;

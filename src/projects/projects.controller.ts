@@ -94,16 +94,14 @@ export class ProjectsController {
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
-  @Roles(Role.PROJECT_MANAGER, Role.ADMIN)
   @ApiUuidParam('id', 'Id do projeto.')
   @ApiOperation({
     summary: 'Atualizar projeto',
     description:
-      'PROJECT_MANAGER membro ou ADMIN. Body vazio volta 400. Com o projeto ARCHIVED, a única alteração aceita é voltar para ACTIVE. Nome, descrição e qualquer outra ação voltam 409. Projeto apagado também volta 409.',
+      'PROJECT_MANAGER membro ou ADMIN. Id inexistente volta 404, inclusive para MEMBER. MEMBER do projeto recebe 403. Body vazio volta 400. Com o projeto ARCHIVED, a única alteração aceita é voltar para ACTIVE. Nome, descrição e qualquer outra ação voltam 409. Projeto apagado também volta 409.',
   })
   @ApiOkResponse({ description: 'Projeto atualizado.' })
-  @ApiForbiddenResponse({ description: 'MEMBER, ou gestor que não participa deste projeto.' })
+  @ApiForbiddenResponse({ description: 'MEMBER do projeto, ou gestor que não participa deste projeto.' })
   @ApiNotFoundResponse({ description: 'Projeto não encontrado.' })
   update(
     @CurrentUser() user: AuthenticatedUser,

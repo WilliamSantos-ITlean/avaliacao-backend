@@ -9,13 +9,13 @@ import { Reflector } from '@nestjs/core';
 import { Role } from '../../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../decorators/current-user.decorator';
 import { ROLES_KEY } from '../decorators/roles.decorator';
-import { PrismaService } from '../../prisma/prisma.service';
+import { UsersRepository } from '../../users/users.repository';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    private readonly prisma: PrismaService,
+    private readonly usersRepository: UsersRepository,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -35,10 +35,7 @@ export class RolesGuard implements CanActivate {
       throw new UnauthorizedException('Token ausente ou inválido');
     }
 
-    const current = await this.prisma.user.findUnique({
-      where: { id: user.id },
-      select: { role: true },
-    });
+    const current = await this.usersRepository.findById(user.id);
 
     if (!current) {
       throw new UnauthorizedException('Usuário não encontrado');

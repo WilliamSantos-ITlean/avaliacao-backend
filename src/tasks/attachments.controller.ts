@@ -69,12 +69,14 @@ export class AttachmentsController {
   @ApiOperation({
     summary: 'Enviar imagem da tarefa',
     description:
-      'Membro do projeto ou ADMIN. Sem arquivo, tipo errado ou acima de 2 MB volta 400. Projeto ARCHIVED volta 409.',
+      'Membro do projeto ou ADMIN. Sem arquivo, tipo errado ou acima de 2 MB volta 400. A assinatura do arquivo precisa ser JPEG ou PNG. Projeto ARCHIVED, ou tarefa DONE ou CANCELLED, volta 409.',
   })
   @ApiCreatedResponse({ description: 'Anexo gravado e ligado à tarefa.' })
   @ApiNotAMember()
   @ApiNotFoundResponse({ description: 'Tarefa não encontrada.' })
-  @ApiConflictResponse({ description: 'Projeto arquivado não aceita novas imagens.' })
+  @ApiConflictResponse({
+    description: 'Projeto arquivado, ou tarefa concluída ou cancelada, não aceita novas imagens.',
+  })
   @UseFilters(ImageUploadExceptionFilter)
   @UseInterceptors(
     FileInterceptor('file', {
@@ -166,13 +168,15 @@ export class AttachmentsController {
   @ApiOperation({
     summary: 'Apagar imagem',
     description:
-      'Só quem enviou ou o ADMIN. Outro membro, inclusive PROJECT_MANAGER, recebe 403. Anexo de outra tarefa ou inexistente volta 404. Projeto ARCHIVED volta 409. O arquivo sai do disco depois que o banco confirma.',
+      'Só quem enviou ou o ADMIN. Outro membro, inclusive PROJECT_MANAGER, recebe 403. Anexo de outra tarefa ou inexistente volta 404. Projeto ARCHIVED, ou tarefa DONE ou CANCELLED, volta 409. O arquivo sai do disco depois que o banco confirma.',
   })
   @ApiOkResponse({ description: 'Anexo apagado, sem o binário.' })
   @ApiNotAMember()
   @ApiForbiddenResponse({ description: 'Quem não enviou a imagem nem é ADMIN.' })
   @ApiNotFoundResponse({ description: 'Tarefa ou anexo não encontrado.' })
-  @ApiConflictResponse({ description: 'Projeto arquivado não aceita apagar imagem.' })
+  @ApiConflictResponse({
+    description: 'Projeto arquivado, ou tarefa concluída ou cancelada, não aceita apagar imagem.',
+  })
   remove(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,

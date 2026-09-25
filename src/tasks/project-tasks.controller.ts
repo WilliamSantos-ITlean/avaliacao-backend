@@ -36,11 +36,11 @@ export class ProjectTasksController {
   @ApiOperation({
     summary: 'Criar tarefa',
     description:
-      'Membro do projeto ou ADMIN. A tarefa nasce TODO. Projeto ARCHIVED ou apagado, responsável que não é membro ou prazo em feriado voltam 409.',
+      'Membro do projeto ou ADMIN. A tarefa nasce TODO. Projeto inexistente volta 404. Responsável com id que não é usuário volta 404. Projeto ARCHIVED ou apagado, responsável que não é membro ou prazo em feriado voltam 409.',
   })
   @ApiCreatedResponse({ description: 'Tarefa criada.' })
   @ApiNotAMember()
-  @ApiNotFoundResponse({ description: 'Projeto não encontrado.' })
+  @ApiNotFoundResponse({ description: 'Projeto não encontrado, ou responsável que não é um usuário.' })
   @ApiConflictResponse({
     description: 'Projeto arquivado, responsável fora do projeto ou prazo em feriado.',
   })

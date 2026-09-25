@@ -8,6 +8,7 @@ import { Role } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { isPrismaError } from '../common/is-prisma-error';
 import { UnitOfWork } from '../prisma/unit-of-work';
+import { TasksRepository } from '../tasks/repositories/tasks.repository';
 import { UsersRepository } from '../users/users.repository';
 import { ActivityAction } from './activity-actions';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
@@ -22,6 +23,7 @@ export class ProjectMembersService {
     private readonly unitOfWork: UnitOfWork,
     private readonly usersRepository: UsersRepository,
     private readonly membersRepository: ProjectMembersRepository,
+    private readonly tasksRepository: TasksRepository,
     private readonly activitiesRepository: ActivitiesRepository,
   ) { }
 
@@ -95,6 +97,17 @@ export class ProjectMembersService {
 
     if (project.ownerId === memberUserId) {
       throw new ConflictException('O dono do projeto precisa continuar membro');
+    }
+
+    const openTasks = await this.tasksRepository.countOpenByAssignee(
+      projectId,
+      memberUserId,
+    );
+
+    if (openTasks > 0) {
+      throw new ConflictException(
+        'Este membro ainda é responsável de uma tarefa em aberto',
+      );
     }
 
     try {

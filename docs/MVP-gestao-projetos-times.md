@@ -68,7 +68,7 @@ Perfis exigidos: `MEMBER`, `PROJECT_MANAGER`, `ADMIN`.
 
 Quem está autenticado e abre um projeto do qual não é membro recebe `403`. O projeto precisa existir: id que não está no banco continua `404`. Sem token, ou com token inválido, continua `401`. ADMIN acessa qualquer projeto (exceção global). A mesma ordem vale para ver, membros, tasks e activities daquele projeto. O `403` revela que o id existe; isso é aceito e deve constar no README.
 
-Em `PATCH /projects/:id` o `@Roles(PROJECT_MANAGER, ADMIN)` responde antes do service. `MEMBER` recebe `403` de papel mesmo se o id não existe ou não é UUID. O `404` e o `400` dessa rota se demonstram com PM ou ADMIN. PM que passa no papel e não é membro daquele projeto continua no `403` de participação.
+Em `PATCH /projects/:id` o papel é checado no service, depois do `authorize`. Id inexistente volta `404`, inclusive para `MEMBER`. `MEMBER` que participa recebe `403`. UUID malformado volta `400` para qualquer papel autenticado. PM que não é membro daquele projeto continua no `403` de participação.
 
 Ordem no service, depois do guard de JWT:
 

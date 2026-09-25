@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client';
 import { TaskStatus } from '../../../generated/prisma/enums';
 import { PrismaService } from '../../prisma/prisma.service';
+import { OPEN_TASK_STATUSES } from '../task-rules';
 
 const taskSelect = {
   id: true,
@@ -74,6 +75,17 @@ export class TasksRepository {
       where: { id },
       data,
       select: taskSelect,
+    });
+  }
+
+  countOpenByAssignee(projectId: string, assigneeId: string) {
+    return this.prisma.task.count({
+      where: {
+        projectId,
+        assigneeId,
+        deletedAt: null,
+        status: { in: [...OPEN_TASK_STATUSES] },
+      },
     });
   }
 

@@ -1,5 +1,4 @@
 import {
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -10,29 +9,31 @@ import { UnitOfWork } from '../prisma/unit-of-work';
 import { ActivityAction } from '../projects/activity-actions';
 import { ProjectAccessService } from '../projects/project-access.service';
 import { ActivitiesRepository } from '../projects/repositories/activities.repository';
+import { TaskAccess } from './task-access';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CommentsRepository } from './repositories/comments.repository';
-import { TasksRepository, TaskView } from './repositories/tasks.repository';
+import { assertTaskAcceptsChanges } from './task-rules';
 
 @Injectable()
 export class CommentsService {
   constructor(
     private readonly access: ProjectAccessService,
+    private readonly tasks: TaskAccess,
     private readonly unitOfWork: UnitOfWork,
-    private readonly tasksRepository: TasksRepository,
     private readonly commentsRepository: CommentsRepository,
     private readonly activitiesRepository: ActivitiesRepository,
   ) {}
 
   async create(taskId: string, dto: CreateCommentDto, user: AuthenticatedUser) {
-    const task = await this.requireTask(taskId);
+    const task = await this.tasks.require(taskId);
     const { actor, project } = await this.access.authorize(
       task.projectId,
       user,
     );
 
-    this.rejectDeletedTask(task, actor);
+    this.tasks.rejectDeleted(task, actor);
     this.access.assertOpenForChanges(project);
+    assertTaskAcceptsChanges(task.status);
 
     return this.unitOfWork.run(async (tx) => {
       const comment = await this.commentsRepository.create(
@@ -60,10 +61,11 @@ export class CommentsService {
   }
 
   async remove(taskId: string, commentId: string, user: AuthenticatedUser) {
-    const task = await this.requireTask(taskId);
+    const task = await this.tasks.require(taskId);
     const { actor, project } = await this.access.authorize(task.projectId, user);
-    this.rejectDeletedTask(task, actor);
+    this.tasks.rejectDeleted(task, actor);
     this.access.assertOpenForChanges(project);
+    assertTaskAcceptsChanges(task.status);
     const comment = await this.commentsRepository.findById(commentId);
 
     if (!comment || comment.taskId !== task.id) {
@@ -93,36 +95,9 @@ export class CommentsService {
   }
 
   async list(taskId: string, user: AuthenticatedUser) {
-    const task = await this.requireTask(taskId);
+    const task = await this.tasks.require(taskId);
     const { actor } = await this.access.authorize(task.projectId, user);
-    this.hideDeletedTask(task, actor);
+    this.tasks.hideDeleted(task, actor);
     return this.commentsRepository.listByTask(task.id);
-  }
-
-  private hideDeletedTask(
-    task: TaskView,
-    actor: AuthenticatedUser,
-  ): void {
-    if (task.deletedAt && actor.role !== Role.ADMIN) {
-      throw new NotFoundException('Tarefa não encontrada');
-    }
-  }
-
-  private rejectDeletedTask(task: TaskView, actor: AuthenticatedUser): void {
-    this.hideDeletedTask(task, actor);
-
-    if (task.deletedAt) {
-      throw new ConflictException('Tarefa apagada não aceita alterações');
-    }
-  }
-
-  private async requireTask(id: string): Promise<TaskView> {
-    const task = await this.tasksRepository.findById(id);
-
-    if (!task) {
-      throw new NotFoundException('Tarefa não encontrada');
-    }
-
-    return task;
   }
 }

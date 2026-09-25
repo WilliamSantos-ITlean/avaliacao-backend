@@ -37,12 +37,15 @@ export class CommentsController {
   @ApiUuidParam('id', 'Id da tarefa.')
   @ApiOperation({
     summary: 'Comentar',
-    description: 'Membro do projeto ou ADMIN. O autor é quem está no token. Projeto ARCHIVED volta 409.',
+    description:
+      'Membro do projeto ou ADMIN. O autor é quem está no token. Projeto ARCHIVED, ou tarefa DONE ou CANCELLED, volta 409.',
   })
   @ApiCreatedResponse({ description: 'Comentário criado.' })
   @ApiNotAMember()
   @ApiNotFoundResponse({ description: 'Tarefa não encontrada.' })
-  @ApiConflictResponse({ description: 'Projeto arquivado não aceita novos comentários.' })
+  @ApiConflictResponse({
+    description: 'Projeto arquivado, ou tarefa concluída ou cancelada, não aceita novos comentários.',
+  })
   create(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -73,13 +76,15 @@ export class CommentsController {
   @ApiOperation({
     summary: 'Apagar comentário',
     description:
-      'Só o autor ou o ADMIN. Outro membro, inclusive PROJECT_MANAGER, recebe 403. Comentário de outra tarefa ou inexistente volta 404. Projeto ARCHIVED volta 409.',
+      'Só o autor ou o ADMIN. Outro membro, inclusive PROJECT_MANAGER, recebe 403. Comentário de outra tarefa ou inexistente volta 404. Projeto ARCHIVED, ou tarefa DONE ou CANCELLED, volta 409.',
   })
   @ApiOkResponse({ description: 'Comentário apagado.' })
   @ApiNotAMember()
   @ApiForbiddenResponse({ description: 'Quem não é o autor nem ADMIN.' })
   @ApiNotFoundResponse({ description: 'Tarefa ou comentário não encontrado.' })
-  @ApiConflictResponse({ description: 'Projeto arquivado não aceita apagar comentário.' })
+  @ApiConflictResponse({
+    description: 'Projeto arquivado, ou tarefa concluída ou cancelada, não aceita apagar comentário.',
+  })
   remove(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,

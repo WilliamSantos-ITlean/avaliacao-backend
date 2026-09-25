@@ -474,6 +474,21 @@ h1, h2, h3, p { margin: 0; }
   margin-bottom: 16px;
 }
 .edit-bar .field { min-width: 180px; }
+.member-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 10px;
+  row-gap: 6px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+.member-add-hint {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+}
 .grow { flex: 1; }
 .tabs { display: flex; gap: 6px; margin: 8px 0 18px; }
 .tab {

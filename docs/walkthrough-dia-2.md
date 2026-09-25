@@ -143,7 +143,7 @@ Estão no `docs/MVP-gestao-projetos-times.md`, seção "Decisões fechadas no di
 - Convite é por `userId` de alguém que já tem conta. Sem SMTP, sem coluna de e-mail no `ProjectMember`.
 - Projeto `ARCHIVED` ainda aceita editar dados e mexer em membros. O bloqueio de criar/mover **task** é o dia 3, e aí o status vira `409`.
 
-O `PATCH` usa `@Roles(PROJECT_MANAGER, ADMIN)` no controller. Um `MEMBER` recebe `403` nessa rota mesmo com id inexistente. O `404` se mostra com um PM ou ADMIN e um UUID que não está no banco. PM de outro projeto ainda cai no `403` do `authorize`.
+O `PATCH /projects/:id` segue a mesma ordem do `authorize`: id inexistente é `404` até para `MEMBER`. Quem participa e é só `MEMBER` recebe `403` no service. PM de outro projeto cai no `403` do `authorize`.
 
 ---
 

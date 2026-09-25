@@ -13,6 +13,7 @@ npm install
 copy .env.example .env
 docker compose up -d
 npx prisma migrate deploy
+npx prisma generate
 npm run seed
 npm run start:dev
 ```
@@ -24,11 +25,11 @@ npm run build
 npm run start:prod
 ```
 
-A API escuta em `http://localhost:3000`. O Swagger fica em `http://localhost:3000/docs` (bônus). O seed cria o `ADMIN` com `ADMIN_EMAIL` e `ADMIN_PASSWORD` do `.env`.
+A API escuta em `http://localhost:3000`. O Swagger fica em `http://localhost:3000/docs` (bônus). O seed cria o `ADMIN` com `ADMIN_EMAIL` e `ADMIN_PASSWORD` do `.env`. Rodar o seed de novo atualiza a senha desse ADMIN para o `ADMIN_PASSWORD` atual.
 
 Toda rota, inclusive cadastro e login, exige o header `x-api-key` com o valor de `API_KEY`. Sem ele a resposta é `401`, antes de qualquer checagem de JWT. Nas rotas privadas, o header seguinte é `Authorization: Bearer <accessToken>`. Cole só o token no Swagger, sem a palavra Bearer.
 
-`GET /` devolve um texto de saúde e também exige `x-api-key`. Não faz parte do domínio.
+`GET /` devolve o texto `API no ar` e também exige `x-api-key`. Não faz parte do domínio.
 
 ## Papéis
 
@@ -47,11 +48,11 @@ Toda rota, inclusive cadastro e login, exige o header `x-api-key` com o valor de
 | Ver projetos apagados | | | sim |
 | Promover papel | | | sim |
 
-`ADMIN` entra em qualquer projeto. Os outros papéis precisam ser `ProjectMember`. Quem cria o projeto vira dono e membro na mesma transação. O dono não pode ser removido (`409`). Este MVP não transfere a posse.
+`ADMIN` entra em qualquer projeto. Os outros papéis precisam ser `ProjectMember`. Quem cria o projeto vira dono e membro na mesma transação. O dono não pode ser removido (`409`). Quem ainda é responsável de uma tarefa em aberto também não pode (`409`): `TODO`, `IN_PROGRESS` ou `WAITING_MANAGER_APPROVE`, e a tarefa não pode estar apagada. `DONE` e `CANCELLED` não travam a saída. Este MVP não transfere a posse.
 
 A role `PROJECT_MANAGER` é da conta, não do projeto. Um gestor adicionado a um projeto de outra pessoa continua gestor: aprova tarefa, edita e arquiva o projeto, adiciona e remove membro. Ele não vira dono ao entrar. Fora do projeto, a role global sozinha responde `403`.
 
-Apagar o projeto é a exceção. Só o dono ou o `ADMIN` chamam `DELETE /projects/:id`. O gestor que só é membro recebe `403` e pode ser removido do projeto. O dono não pode ser removido.
+Apagar o projeto é a exceção. Só o dono ou o `ADMIN` chamam `DELETE /projects/:id`. O gestor que só é membro recebe `403` e pode ser removido do projeto, desde que não seja responsável de uma tarefa em aberto. O dono não pode ser removido.
 
 A role usada na regra é a do banco, não a gravada no token. Promover alguém vale na request seguinte. Usuário apagado do banco recebe `401`. Promoção de papel não grava `Activity`: o histórico é do projeto, não da conta global.
 
@@ -61,15 +62,17 @@ Depois do JWT, no recurso de um projeto:
 
 1. Recurso inexistente: `404`
 2. Autenticado, não membro e não `ADMIN`: `403`
-3. Regra de negócio (membro duplicado, `ARCHIVED`, transição inválida, feriado, responsável fora do time): `409`
+3. Regra de negócio (membro duplicado, membro com tarefa em aberto, `ARCHIVED`, transição inválida, feriado, responsável fora do time): `409`
 
 O `403` de não membro revela que o id existe. Sem token, ou com token inválido: `401`.
 
-Em `PATCH /projects/:id`, o `@Roles(PROJECT_MANAGER, ADMIN)` responde antes do service. `MEMBER` recebe `403` de papel mesmo se o id não existe. O `404` dessa rota se demonstra com PM ou ADMIN.
+`PATCH /projects/:id` segue a mesma ordem. `MEMBER` com id inexistente recebe `404`. `MEMBER` que participa do projeto recebe `403`. O papel é checado no service, depois de saber se o projeto existe.
 
 `POST` e `DELETE` de membro não usam `@Roles`. O `404` do projeto acontece primeiro; o `403` de papel sai no service.
 
 `DELETE /projects/:id` também não usa `@Roles`. O `404` vem primeiro. Quem participa, mas não é o dono nem `ADMIN`, recebe `403` no service.
+
+`POST /projects` e `GET /projects/deleted` continuam com `@Roles`, porque não há um projeto para devolver `404`. `MEMBER` recebe `403` nessas rotas.
 
 Body inválido, campo extra (`forbidNonWhitelisted`) ou UUID malformado: `400`.
 
@@ -91,7 +94,9 @@ TODO ⇄ IN_PROGRESS → WAITING_MANAGER_APPROVE → DONE
 
 `DONE` e `CANCELLED` não têm saída. A tarefa nasce `TODO`. O body de criação não aceita status.
 
-`assigneeId` é opcional. Se vier, a pessoa precisa ser membro do projeto (`409`). `null` tira o responsável.
+Esses dois estados também recusam edição de título, descrição, responsável e prazo, e recusam comentário e anexo, com `409`. Repetir o status atual continua `200`, sem `Activity`. Apagar a tarefa (lógico) continua aceito.
+
+`assigneeId` é opcional. Se vier, a pessoa precisa existir (`404` se o id não é um usuário) e ser membro do projeto (`409`). `null` tira o responsável.
 
 ## Projeto arquivado
 
@@ -119,17 +124,38 @@ O dia comparado com a Brasil API é o calendário `America/Sao_Paulo` (UTC−3, 
 - acima de 2 MB: `400`
 - MIME diferente de `image/jpeg` ou `image/png`: `400`
 
-A validação usa o MIME declarado. Não há leitura da assinatura dos bytes. O arquivo fica em `UPLOAD_DIR` (padrão `./uploads`, fora do Git) e a linha em `Attachment` liga o arquivo à tarefa. `GET .../attachments/:attachmentId` devolve os bytes para membro ou `ADMIN`.
+A validação lê a assinatura do arquivo (`FileTypeValidator` com `overrideMimeType`) e só aceita `image/jpeg` ou `image/png`. O arquivo fica em `UPLOAD_DIR` (padrão `./uploads`, fora do Git) e a linha em `Attachment` liga o arquivo à tarefa. `GET .../attachments/:attachmentId` devolve os bytes para membro ou `ADMIN`.
 
 ## Interceptor
 
-`LoggingInterceptor` é global. Depois de cada request bem-sucedida ele grava método, URL, status HTTP e duração em milissegundos. Não grava body, header, token nem senha. Não decide regra de negócio.
+`LoggingInterceptor` é global. Depois de cada request, com sucesso ou falha, ele grava método, URL, status HTTP e duração em milissegundos. Na falha, o status é o da `HttpException`, ou `500`. Não grava body, header, token nem senha. Não decide regra de negócio.
 
 ## Activity
 
-Grava, na mesma transação da ação: criar, editar e arquivar projeto; adicionar e remover membro; criar e editar tarefa; mudar status; criar e apagar comentário; enviar e apagar anexo.
+Grava, na mesma transação da ação: criar, editar, arquivar e desarquivar projeto; adicionar e remover membro; criar e editar tarefa; mudar status; criar e apagar comentário; enviar e apagar anexo. Desarquivar grava `PROJECT_UNARCHIVED`.
 
 Apagar projeto ou tarefa grava `PROJECT_DELETED` ou `TASK_DELETED` e não remove a linha. `ARCHIVED`, `CANCELLED` e `DONE` continuam sendo estado, não exclusão.
+
+## Exemplo de requisição
+
+A base é `http://localhost:3000`. Troque `<KEY>` pelo `API_KEY` do `.env`.
+
+```bash
+curl -s -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: <KEY>" \
+  -d "{\"email\":\"admin@email.com\",\"password\":\"admin1234\"}"
+```
+
+A resposta `201` traz `accessToken`. A chamada seguinte usa esse token:
+
+```bash
+curl -s http://localhost:3000/auth/me \
+  -H "x-api-key: <KEY>" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+`200` devolve o usuário da sessão, sem `passwordHash`. Sem `x-api-key`, ou com Bearer adulterado, a resposta é `401`.
 
 ## Endpoints
 
@@ -157,7 +183,7 @@ Headers comuns das rotas privadas: `x-api-key` e `Authorization: Bearer <token>`
 
 `GET /projects/:id` — membro ou ADMIN. `200`. `404` inexistente. Projeto apagado também é `404`, exceto para o ADMIN. `403` autenticado fora do projeto.
 
-`PATCH /projects/:id` — PM membro ou ADMIN. Body: `{ "name"?, "description"?, "status"?: "ACTIVE" | "ARCHIVED" }`. Pelo menos um campo. `200`. `400` body vazio ou inválido. `403` MEMBER (mesmo com id inexistente) ou PM que não participa. `404` inexistente, quando quem chama passou no papel. `409` se o projeto está `ARCHIVED` e a mudança não é só voltar para `ACTIVE`, ou se já foi apagado.
+`PATCH /projects/:id` — PM membro ou ADMIN. Body: `{ "name"?, "description"?, "status"?: "ACTIVE" | "ARCHIVED" }`. Pelo menos um campo. `200`. `400` body vazio ou inválido. `404` inexistente, inclusive quando quem chama é `MEMBER`. `403` MEMBER que participa, ou PM que não participa. `409` se o projeto está `ARCHIVED` e a mudança não é só voltar para `ACTIVE`, ou se já foi apagado. Voltar para `ACTIVE` grava `PROJECT_UNARCHIVED`.
 
 `DELETE /projects/:id` — dono ou ADMIN. `200` com `deletedAt`. `403` quem não é o dono (inclusive PM membro) ou quem está fora do projeto. `404` inexistente. `409` se o ADMIN tentar apagar de novo.
 
@@ -167,17 +193,17 @@ Headers comuns das rotas privadas: `x-api-key` e `Authorization: Bearer <token>`
 
 `GET /projects/:id/members` — membro ou ADMIN. `200` e-mail e papel, nunca `passwordHash`. `404` / `403` como nas outras rotas do projeto.
 
-`DELETE /projects/:id/members/:userId` — PM membro ou ADMIN. `200`. `404` projeto ou membro. `403` MEMBER. `409` tentativa de remover o dono.
+`DELETE /projects/:id/members/:userId` — PM membro ou ADMIN. `200`. `404` projeto ou membro. `403` MEMBER. `409` tentativa de remover o dono, ou um membro que ainda é responsável de uma tarefa em aberto (`TODO`, `IN_PROGRESS` ou `WAITING_MANAGER_APPROVE`, não apagada). Tarefa `DONE`, `CANCELLED` ou apagada não impede.
 
 ### Tarefas
 
-`POST /projects/:id/tasks` — membro ou ADMIN. Body: `{ "title", "description"?, "assigneeId"?, "dueDate"? }`. Nasce `TODO`. `201`. `404` projeto. `403` fora do projeto. `409` projeto arquivado, responsável que não é membro, ou prazo em feriado. `502` se a consulta de feriados falhar.
+`POST /projects/:id/tasks` — membro ou ADMIN. Body: `{ "title", "description"?, "assigneeId"?, "dueDate"? }`. Nasce `TODO`. `201`. `404` projeto, ou responsável cujo id não é um usuário. `403` fora do projeto. `409` projeto arquivado, responsável que existe e não é membro, ou prazo em feriado. `502` se a consulta de feriados falhar.
 
 `GET /projects/:id/tasks` — membro ou ADMIN. `200`.
 
 `GET /tasks/:id` — membro do projeto da tarefa, ou ADMIN. `200`. `404` tarefa. `403` fora do projeto.
 
-`PATCH /tasks/:id` — membro ou ADMIN. Body com pelo menos um de `title`, `description`, `assigneeId`, `dueDate`. Não muda status. `200`. `400` body vazio. `409` projeto arquivado ou apagado, responsável fora do time, feriado, ou tarefa já apagada. `502` se a consulta de feriados falhar.
+`PATCH /tasks/:id` — membro ou ADMIN. Body com pelo menos um de `title`, `description`, `assigneeId`, `dueDate`. Não muda status. `200`. `400` body vazio, se a tarefa ainda aceita edição. `404` tarefa, ou responsável cujo id não é um usuário. `409` projeto arquivado ou apagado, tarefa `DONE` ou `CANCELLED`, responsável que existe e está fora do time, feriado, ou tarefa já apagada. `502` se a consulta de feriados falhar.
 
 `PATCH /tasks/:id/status` — membro ou ADMIN, com a máquina de estados acima. Body: `{ "status" }`. `200`. `403` MEMBER tenta sair de `WAITING_MANAGER_APPROVE`. `409` salto inválido, projeto arquivado ou apagado, ou tarefa já apagada.
 
@@ -185,21 +211,21 @@ Headers comuns das rotas privadas: `x-api-key` e `Authorization: Bearer <token>`
 
 ### Comentários
 
-`POST /tasks/:id/comments` — membro ou ADMIN. Body: `{ "body" }` (1 a 2000 caracteres). O autor é o token. `201`. `409` projeto arquivado. `404` tarefa. `403` fora do projeto.
+`POST /tasks/:id/comments` — membro ou ADMIN. Body: `{ "body" }` (1 a 2000 caracteres). O autor é o token. `201`. `409` projeto arquivado, ou tarefa `DONE` ou `CANCELLED`. `404` tarefa. `403` fora do projeto.
 
 `GET /tasks/:id/comments` — membro ou ADMIN. `200`.
 
-`DELETE /tasks/:id/comments/:commentId` — autor do comentário ou ADMIN. `200` comentário apagado. `404` tarefa, ou comentário inexistente ou de outra tarefa. `403` outro membro (inclusive PM que não é o autor) ou quem está fora do projeto. `409` projeto arquivado.
+`DELETE /tasks/:id/comments/:commentId` — autor do comentário ou ADMIN. `200` comentário apagado. `404` tarefa, ou comentário inexistente ou de outra tarefa. `403` outro membro (inclusive PM que não é o autor) ou quem está fora do projeto. `409` projeto arquivado, ou tarefa `DONE` ou `CANCELLED`.
 
 ### Anexos
 
-`POST /tasks/:id/attachments` — membro ou ADMIN. Campo `file`. `201`. `400` ausência, tamanho ou tipo. `409` projeto arquivado.
+`POST /tasks/:id/attachments` — membro ou ADMIN. Campo `file`. `201`. `400` ausência, tamanho ou tipo. `409` projeto arquivado, ou tarefa `DONE` ou `CANCELLED`.
 
 `GET /tasks/:id/attachments` — membro ou ADMIN. `200` metadados, sem o binário.
 
 `GET /tasks/:id/attachments/:attachmentId` — membro ou ADMIN. `200` bytes (`image/jpeg` ou `image/png`). `404` anexo inexistente ou de outra tarefa.
 
-`DELETE /tasks/:id/attachments/:attachmentId` — quem enviou ou ADMIN. `200`. `404` tarefa, ou anexo inexistente ou de outra tarefa. `403` outro membro (inclusive PM que não enviou) ou quem está fora do projeto. `409` projeto arquivado. O arquivo sai do disco depois que o banco confirma.
+`DELETE /tasks/:id/attachments/:attachmentId` — quem enviou ou ADMIN. `200`. `404` tarefa, ou anexo inexistente ou de outra tarefa. `403` outro membro (inclusive PM que não enviou) ou quem está fora do projeto. `409` projeto arquivado, ou tarefa `DONE` ou `CANCELLED`. O arquivo sai do disco depois que o banco confirma.
 
 ### Atividades e feriados
 
@@ -229,4 +255,4 @@ Substitua `<KEY>` e cole o token devolvido pelo login. A base é `http://localho
 
 9. Feriados. `GET /holidays?year=2026` com `HOLIDAYS_API_URL` válida. Esperado: `200`. Apontar a URL para um host inexistente e repetir. Esperado: `502`. Criar tarefa com `dueDate` no dia civil de Brasília igual a um feriado nacional (por exemplo `2026-01-01T22:00:00-03:00`, que em UTC já é 2 de janeiro, mas em Brasília ainda é 1 de janeiro). Esperado: `409`.
 
-10. Máquina de estados. `TODO` → `IN_PROGRESS` → `WAITING_MANAGER_APPROVE` como membro (`200`). Tentar `DONE` como membro (`403`). Gestor aprova para `DONE` (`200`). Tentar sair de `DONE` (`409`). Tentar `TODO` direto para `DONE` em outra tarefa (`409`).
+10. Máquina de estados. `TODO` → `IN_PROGRESS` → `WAITING_MANAGER_APPROVE` como membro (`200`). Tentar `DONE` como membro (`403`). Gestor aprova para `DONE` (`200`). Tentar sair de `DONE` (`409`). Tentar `TODO` direto para `DONE` em outra tarefa (`409`). Com a tarefa em `DONE`, `PATCH` de título, comentário ou anexo (`409`).

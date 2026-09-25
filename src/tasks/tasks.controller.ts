@@ -54,13 +54,14 @@ export class TasksController {
   @ApiOperation({
     summary: 'Editar tarefa',
     description:
-      'Membro do projeto ou ADMIN. Body vazio volta 400. Não muda o estado: isso é PATCH /tasks/:id/status. Projeto ARCHIVED ou apagado volta 409, inclusive para título, descrição, responsável e prazo. Responsável fora do time ou feriado (dia civil de Brasília) também voltam 409. Tarefa apagada some para quem não é ADMIN.',
+      'Membro do projeto ou ADMIN. Body vazio volta 400 se a tarefa ainda aceita edição. Não muda o estado: isso é PATCH /tasks/:id/status. Projeto ARCHIVED ou apagado volta 409, inclusive para título, descrição, responsável e prazo. Tarefa DONE ou CANCELLED também volta 409. Responsável que não é usuário volta 404. Responsável fora do time ou feriado (dia civil de Brasília) voltam 409. Tarefa apagada some para quem não é ADMIN.',
   })
   @ApiOkResponse({ description: 'Tarefa atualizada.' })
   @ApiNotAMember()
-  @ApiNotFoundResponse({ description: 'Tarefa não encontrada.' })
+  @ApiNotFoundResponse({ description: 'Tarefa não encontrada, ou responsável que não é um usuário.' })
   @ApiConflictResponse({
-    description: 'Projeto arquivado ou apagado, responsável fora do projeto ou prazo em feriado nacional.',
+    description:
+      'Projeto arquivado ou apagado, tarefa concluída ou cancelada, responsável fora do projeto ou prazo em feriado nacional.',
   })
   update(
     @CurrentUser() user: AuthenticatedUser,

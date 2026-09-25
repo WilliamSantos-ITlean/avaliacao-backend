@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '../prisma/prisma.module';
+import { UsersRepositoryModule } from '../users/users-repository.module';
 import { RolesGuard } from './guards/roles.guard';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [UsersRepositoryModule],
   providers: [RolesGuard],
   exports: [RolesGuard],
 })

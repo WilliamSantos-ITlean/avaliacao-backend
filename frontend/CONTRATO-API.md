@@ -72,7 +72,7 @@ O Norte manda `{ "email": "ana@email.com" }`. E-mail inválido → `400`. Conta 
 
 Repetir o mesmo par projeto+usuário → `409`.
 
-`DELETE /projects/:id/members/:userId` — o `:userId` é o id do usuário, não o id da linha `ProjectMember`.
+`DELETE /projects/:id/members/:userId` — o `:userId` é o id do usuário, não o id da linha `ProjectMember`. Dono do projeto → `409`. Membro responsável de tarefa em aberto (`TODO`, `IN_PROGRESS` ou `WAITING_MANAGER_APPROVE`, não apagada) → `409`. `DONE`, `CANCELLED` ou tarefa apagada não impedem a saída.
 
 `GET` pode devolver o membro com `userId` e `email`, ou `user: { id, email, role }`.
 

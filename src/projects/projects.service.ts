@@ -116,6 +116,7 @@ export class ProjectsService {
 
   async update(id: string, dto: UpdateProjectDto, user: AuthenticatedUser) {
     const { project, actor } = await this.access.authorize(id, user);
+    this.assertCanEdit(actor);
 
     if (project.deletedAt) {
       throw new ConflictException('Projeto apagado não aceita alterações');
@@ -162,6 +163,14 @@ export class ProjectsService {
     });
   }
 
+  private assertCanEdit(actor: AuthenticatedUser): void {
+    if (actor.role === Role.PROJECT_MANAGER || actor.role === Role.ADMIN) {
+      return;
+    }
+
+    throw new ForbiddenException('Sem permissão para esta ação');
+  }
+
   private descriptionOrNull(value?: string): string | null {
     if (!value?.trim()) {
       return null;
@@ -192,9 +201,13 @@ export class ProjectsService {
     return changes;
   }
 
-  private actionFor(changes: ProjectPatchData): string {
+  private actionFor(changes: ProjectPatchData): ActivityAction {
     if (changes.status === ProjectStatus.ARCHIVED) {
       return ActivityAction.PROJECT_ARCHIVED;
+    }
+
+    if (changes.status === ProjectStatus.ACTIVE) {
+      return ActivityAction.PROJECT_UNARCHIVED;
     }
 
     return ActivityAction.PROJECT_UPDATED;
